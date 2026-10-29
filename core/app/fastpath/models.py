@@ -74,7 +74,8 @@ class FastScreen(BaseModel):
     # text search running · complete: everything resolved (or `error` says why not)
     status: Literal["starting", "partial", "complete"] = "starting"
     variables: list[ScreenVariable] = Field(default_factory=list)
-    contradictions: list[Contradiction] = Field(default_factory=list)
+    contradictions: list[Contradiction] = Field(default_factory=list)        # touch this screen's items
+    other_contradictions: list[Contradiction] = Field(default_factory=list)  # all the others in the record
     timings_ms: dict[str, float] = Field(default_factory=dict)
     error: Optional[str] = None                 # set when the select call failed
     version: int = 0                            # bumped on every update (for SSE / polling)

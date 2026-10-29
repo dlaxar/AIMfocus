@@ -226,9 +226,16 @@ async def _derive_all(screen: FastScreen, store: FactStore, t0: float) -> None:
     await asyncio.gather(*(_derive_one(screen, v, store, passages, sem, t0) for v in pending))
     screen.timings_ms["derive"] = _elapsed_ms(t_derive)
     screen.timings_ms["complete"] = _elapsed_ms(t0)
-    screen.contradictions = _relevant_contradictions(screen, store)
+    _attach_contradictions(screen, store)
     screen.status = "complete"
     screen.version += 1
+
+
+def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
+    """Relevant ones first; every other contradiction of the record stays available too."""
+    screen.contradictions = _relevant_contradictions(screen, store)
+    shown = {cx.contradiction_id for cx in screen.contradictions}
+    screen.other_contradictions = [cx for cx in store.contradictions if cx.contradiction_id not in shown]
 
 
 def _relevant_contradictions(screen: FastScreen, store: FactStore):
@@ -286,7 +293,7 @@ async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
         screen.variables.append(documented or ScreenVariable(
             name=v.name, label=v.label, state="pending", priority=v.priority,
         ))
-    screen.contradictions = _relevant_contradictions(screen, store)
+    _attach_contradictions(screen, store)
     screen.timings_ms["first_response"] = _elapsed_ms(t0)
 
     if any(v.state == "pending" for v in screen.variables):
@@ -303,11 +310,17 @@ def get_screen(screen_id: str) -> Optional[FastScreen]:
     return _screens.get(screen_id)
 
 
-async def wait_for(screen_id: str, timeout_s: float = 30.0) -> Optional[FastScreen]:
-    """Wait until the background derive calls of a screen are done (tests / ?wait=true)."""
+async def wait_for(screen_id: str, timeout_s: float = 60.0) -> Optional[FastScreen]:
+    """
+    Wait until the screen is complete (tests / ?wait=true). After `timeout_s` the screen
+    is returned as it stands (status "starting" or "partial") instead of failing.
+    """
     task = _tasks.get(screen_id)
     if task is not None:
-        await asyncio.wait_for(asyncio.shield(task), timeout=timeout_s)
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            logger.warning("fastpath: screen %s not complete after %.0f s", screen_id, timeout_s)
     return _screens.get(screen_id)
 
 

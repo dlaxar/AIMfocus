@@ -63,6 +63,8 @@ class TestScreens:
         assert v["kidney_function"]["state"] == "not_documented"
         assert v["antithrombotic_medication"]["state"] == "not_documented"
         assert {"select", "first_response", "derive", "complete"} <= set(final["timings_ms"])
+        # Every contradiction of the record is on the screen: relevant ones plus the rest
+        assert isinstance(final["contradictions"], list) and isinstance(final["other_contradictions"], list)
 
     def test_empty_value_falls_back_to_stored_fact_text(self, client):
         from app.fastpath.models import SelectedVariable
@@ -72,6 +74,18 @@ class TestScreens:
         v = SelectedVariable(name="allergies", label="Allergies", value="  ", fact_ids=["F:TEST001:all:01"])
         out = _documented_variable(v, get_store(), 0.0)
         assert out is not None and out.value == "Contrast media allergy (nausea, dizziness)"
+
+    def test_wait_returns_current_state_on_timeout(self, client, monkeypatch):
+        import asyncio
+        from app.fastpath import service
+
+        async def slow(*args, **kwargs):
+            await asyncio.sleep(1)
+            raise RuntimeError("slow model")
+        monkeypatch.setattr(service, "_select", slow)
+        sid = client.post("/api/v2/screens", json={"situation": "x"}).json()["screen_id"]
+        screen = client.portal.call(service.wait_for, sid, 0.05)
+        assert screen is not None and screen.status == "starting"
 
     def test_select_failure_is_reported_on_the_screen(self, client, monkeypatch):
         from app.fastpath import service
