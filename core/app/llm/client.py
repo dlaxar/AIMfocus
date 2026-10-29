@@ -29,6 +29,17 @@ _FIXTURE_DIR = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "llm
 # Protocol / base
 # ---------------------------------------------------------------------------
 
+def _text(content: Any) -> str:
+    """
+    A message's content as plain text. Content is a string, or a list of parts
+    {"text": ..., "cache": True?}: the parts before the variable rest of a prompt are
+    marked "cache" so Claude caches them; other models get the parts joined.
+    """
+    if isinstance(content, str):
+        return content
+    return "\n\n".join(part["text"] for part in content)
+
+
 class LLMClient:
     """Abstract interface – concrete implementations below."""
 
@@ -122,7 +133,7 @@ class GeminiClient(LLMClient):
         contents: list[dict[str, Any]] = []
         for msg in messages:
             role = msg.get("role", "user")
-            content = msg.get("content", "")
+            content = _text(msg.get("content", ""))
             if role == "system":
                 system_parts.append(content)
             elif role == "user":
@@ -165,6 +176,100 @@ class GeminiClient(LLMClient):
                 raise
 
         return raw_text
+
+
+# ---------------------------------------------------------------------------
+# Anthropic client (Claude models, selected by a "claude-" model name)
+# ---------------------------------------------------------------------------
+
+class AnthropicClient(LLMClient):
+    """
+    Wraps the official `anthropic` SDK. Structured output via `messages.parse` with the
+    Pydantic schema. No `temperature` (the API rejects sampling parameters since
+    2026-10-21); depth is set with RUNTIME_EFFORT (output_config.effort).
+    """
+
+    def __init__(self) -> None:
+        try:
+            import anthropic  # type: ignore[import]
+        except ImportError as exc:
+            raise RuntimeError("anthropic is not installed. Run: pip install anthropic") from exc
+        if not settings.CLAUDE_API_KEY:
+            raise RuntimeError("CLAUDE_API_KEY (or ANTHROPIC_API_KEY) is not set")
+        self._client = anthropic.AsyncAnthropic(api_key=settings.CLAUDE_API_KEY)
+
+    async def generate(
+        self,
+        prompt_name: str,
+        messages: list[dict[str, str]],
+        response_schema: Optional[Type[BaseModel]] = None,
+        temperature: float = 0.0,
+        model: Optional[str] = None,
+    ) -> Any:
+        model_name = model or settings.RUNTIME_MODEL
+        system = "\n\n".join(_text(m.get("content", "")) for m in messages if m.get("role") == "system")
+        turns = [{"role": m["role"], "content": self._blocks(m.get("content", ""))} for m in messages if m.get("role") in ("user", "assistant")]
+        if not turns:
+            return {} if response_schema is None else response_schema.model_construct()
+
+        kwargs: dict[str, Any] = {
+            "model": model_name,
+            "max_tokens": 16000,
+            "messages": turns,
+        }
+        if system:
+            kwargs["system"] = system
+        if model_name == settings.RUNTIME_MODEL and settings.RUNTIME_EFFORT:
+            kwargs["output_config"] = {"effort": settings.RUNTIME_EFFORT}
+        if model_name == settings.RUNTIME_MODEL and settings.RUNTIME_THINKING_BUDGET == 0:
+            # Haiku 5.5 accepts this; Opus 5.5 rejects it (set RUNTIME_EFFORT=low there instead)
+            kwargs["thinking"] = {"type": "disabled"}
+
+        if response_schema is None:
+            response = await self._client.messages.create(**kwargs)
+            return "".join(b.text for b in response.content if b.type == "text")
+
+        response = await self._client.messages.parse(output_format=response_schema, **kwargs)
+        logger.debug("AnthropicClient %s: %s", prompt_name, response.usage)
+        if response.stop_reason == "refusal" or response.parsed_output is None:
+            logger.error("AnthropicClient: no parsed output for %s (stop_reason=%s)", prompt_name, response.stop_reason)
+            raise RuntimeError(f"Claude returned no structured output (stop_reason={response.stop_reason})")
+        return response.parsed_output
+
+    @staticmethod
+    def _blocks(content: Any) -> Any:
+        """A string stays a string; parts become text blocks, "cache" parts with cache_control."""
+        if isinstance(content, str):
+            return content
+        return [
+            {"type": "text", "text": part["text"], **({"cache_control": {"type": "ephemeral"}} if part.get("cache") else {})}
+            for part in content
+        ]
+
+
+class RoutingClient(LLMClient):
+    """Sends each call to Anthropic for a "claude-" model and to Gemini otherwise."""
+
+    def __init__(self) -> None:
+        self._gemini: Optional[GeminiClient] = None
+        self._anthropic: Optional[AnthropicClient] = None
+
+    async def generate(
+        self,
+        prompt_name: str,
+        messages: list[dict[str, str]],
+        response_schema: Optional[Type[BaseModel]] = None,
+        temperature: float = 0.0,
+        model: Optional[str] = None,
+    ) -> Any:
+        model_name = model or settings.RUNTIME_MODEL
+        if model_name.startswith("claude-"):
+            self._anthropic = self._anthropic or AnthropicClient()
+            target: LLMClient = self._anthropic
+        else:
+            self._gemini = self._gemini or GeminiClient()
+            target = self._gemini
+        return await target.generate(prompt_name, messages, response_schema, temperature, model_name)
 
 
 # ---------------------------------------------------------------------------
@@ -246,11 +351,11 @@ def use_client(client: LLMClient) -> None:
 
 
 def get_client() -> LLMClient:
-    """Return a singleton LLM client (Fake or Gemini depending on settings)."""
+    """Return a singleton LLM client (Fake, or Gemini / Anthropic routed by model name)."""
     global _client_instance
     if _client_instance is None:
         if settings.LLM_FAKE:
             _client_instance = FakeLLMClient()
         else:
-            _client_instance = GeminiClient()
+            _client_instance = RoutingClient()
     return _client_instance

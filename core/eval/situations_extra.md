@@ -81,7 +81,7 @@ You are the gastroenterologist seeing her for reflux symptoms.
 
 1. Which reflux diagnosis and grade are documented?
 2. Does she take an acid-suppressing drug?
-3. What did the rectal examination in June 2015 show?
+3. Which of her current medicines can irritate the oesophagus or stomach?
 
 ## 16. Dentist – planned tooth extraction
 

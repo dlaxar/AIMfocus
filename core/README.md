@@ -152,9 +152,12 @@ data/                     gitignored – IBM patient data
 | `CACHE_DIR` | `./cache` | Preprocessing output (gitignored) |
 | `PATIENT_ID` | `0000-0001` | Active patient |
 | `GEMINI_API_KEY` | – | Your Google AI API key |
-| `RUNTIME_MODEL` | `gemini-3.5-flash-lite` | Runtime model (select/derive, R1/R2) |
+| `CLAUDE_API_KEY` | – | Anthropic API key, for `claude-` runtime models |
+| `RUNTIME_MODEL` | `claude-haiku-5-5` | Runtime model (select/derive, R1/R2); `gemini-…` models go to Google |
+| `RUNTIME_THINKING_BUDGET` | `0` | `0` = no thinking (Haiku 5.5, Gemini flash); `-1` = unset (needed for Opus 5.5) |
+| `RUNTIME_EFFORT` | – | Claude only: `low` / `medium` / `high` |
 | `RUNTIME_THINKING_LEVEL` | `minimal` | Gemini thinking level for runtime calls (`""` = model default) |
-| `PREPROCESS_MODEL` | `gemini-3.1-pro-preview` | Model for S1/S3 |
+| `PREPROCESS_MODEL` | `gemini-4-argon` | Model for S1/S3 |
 | `LLM_FAKE` | `false` | `true` in CI – returns fixture responses |
 | `CONTRADICTION_LLM_SWEEP` | `false` | Extra LLM sweep for S3 |
 | `REFERENCE_DATE` | `auto` | `auto` = latest document date |

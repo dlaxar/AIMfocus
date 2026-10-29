@@ -4,7 +4,7 @@ preprocess/run.py – CLI orchestrator for the offline preprocessing pipeline.
 Usage:
     python -m preprocess.run --patient 0000-0001
     python -m preprocess.run --patient 0000-0001 --from s1
-    python -m preprocess.run --patient 0000-0001 --from s3 --model gemini-3.1-pro-preview
+    python -m preprocess.run --patient 0000-0001 --from s3 --model gemini-4-argon
 """
 from __future__ import annotations
 
@@ -55,8 +55,8 @@ def run_pipeline(patient_id: str, from_stage: str, model: str | None) -> None:
 
     if start <= 3:
         logger.info("=== S3: Contradictions ===")
-        from preprocess import s3_contradictions
-        asyncio.run(s3_contradictions.run_async(cache_dir, patient_id))
+        from contradictions import run as cx
+        asyncio.run(cx.run_async(cache_dir, patient_id, data_dir=data_dir))
 
     if start <= 4:
         logger.info("=== S4: Export ===")

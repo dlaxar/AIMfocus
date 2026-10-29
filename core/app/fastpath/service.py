@@ -3,9 +3,11 @@ app/fastpath/service.py – fast-path screen builder.
 
 create_screen() registers the screen and returns its ID at once (status "starting"); the rest
 runs in the background and fills the stored screen in place:
-  1. One select call (fact-store structure + fact sheet → variables with values + fact IDs).
-  2. Validate each documented variable with the R3 validator; build sources (status "partial").
-     Variables without facts are "pending".
+  1. One select call (fact-store structure + fact sheet → variables + which concepts/facts
+     answer them). The LLM writes no values.
+  2. Code pulls the facts from the store (unknown IDs dropped, time scope applied) and builds
+     the value from their stored text, with sources (status "partial"). A variable with no
+     resolvable fact is "pending".
   3. One derive call per pending variable over the raw passages,
      all in parallel (bounded by FASTPATH_MAX_PARALLEL_DERIVE). Each result is validated
      (passage IDs exist, quotes verbatim, numbers backed by quotes) and written into the
@@ -29,14 +31,14 @@ from app.config import settings
 from app.fastpath.models import (
     DeriveOutput,
     FastScreen,
+    PickOutput,
     ScreenVariable,
     SelectedVariable,
     SelectOutput,
 )
 from app.llm.client import get_client
 from app.runtime.screen import _best_passage_id, _build_source
-from app.runtime.validator import validate_item
-from app.schemas import AnswererItem, Source
+from app.schemas import DerivedFact, Fact, Source
 from app.store import FactStore
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,56 @@ def concepts_block(store: FactStore) -> str:
     return "\n".join(lines) or "(no concepts)"
 
 
+class Catalogue:
+    """
+    The fact store as the select call sees it: every concept and fact under a short handle
+    (c12, f40, d3). Full IDs such as "F:12340018:med:01" cost many output tokens each.
+    """
+
+    def __init__(self, store: FactStore) -> None:
+        self.handles: dict[str, str] = {}   # handle → concept_id / fact_id
+        concept_handle: dict[str, str] = {}
+        lines = ["### Concepts (handle | type | label | facts)"]
+        for i, c in enumerate(sorted(store.concepts.values(), key=lambda c: c.concept_id), 1):
+            concept_handle[c.concept_id] = self._add(f"c{i}", c.concept_id)
+            lines.append(f"c{i} | {c.type} | {c.label_en} | {len(c.fact_ids)}")
+        lines += ["", "### Facts (handle | concept | description | status | laterality | date)"]
+        facts = sorted(store.facts.values(), key=lambda f: (f.date or "", f.fact_id))
+        for i, f in enumerate(facts, 1):
+            self._add(f"f{i}", f.fact_id)
+            lines.append(" | ".join([
+                f"f{i}", concept_handle.get(f.concept_id or "", "-"), f.en or f.span,
+                f.status, f.laterality or "-", f.date or "-",
+            ]))
+        lines += ["", "### Derived facts (handle | description | date)"]
+        for i, d in enumerate(sorted(store.derived.values(), key=lambda d: d.fact_id), 1):
+            self._add(f"d{i}", d.fact_id)
+            lines.append(f"d{i} | {d.en} | {d.date or '-'}")
+        self.text = "\n".join(lines)
+
+    def _add(self, handle: str, full_id: str) -> str:
+        self.handles[handle] = full_id
+        return handle
+
+    def resolve(self, handle: str) -> str:
+        """Full ID for a handle; a full ID passes through (unknown ones are dropped later)."""
+        return self.handles.get(handle.strip(), handle.strip())
+
+
+_catalogues: dict[int, Catalogue] = {}
+
+
+def catalogue(store: FactStore) -> Catalogue:
+    if id(store) not in _catalogues:
+        _catalogues.clear()  # one store per process; a reload replaces it
+        _catalogues[id(store)] = Catalogue(store)
+    return _catalogues[id(store)]
+
+
+def _name(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "variable"
+
+
 def passages_block(store: FactStore) -> str:
     lines = []
     for p in store.passages.values():
@@ -92,60 +144,139 @@ def passages_block(store: FactStore) -> str:
 # ---------------------------------------------------------------------------
 
 async def _select(situation: str, store: FactStore, reference_date: str) -> SelectOutput:
-    prompt = (
-        _prompt("fp_select")
-        .replace("{{concepts}}", concepts_block(store))
-        .replace("{{fact_sheet}}", store.fact_sheet)
-        .replace("{{reference_date}}", reference_date or "unknown")
-        .replace("{{situation}}", situation)
+    cat = catalogue(store)
+    # Everything before the situation is the same for every screen, so it is sent as a
+    # cacheable first part (prompt caching on Claude, implicit caching on Gemini)
+    fixed = _prompt("fp_select").replace("{{catalogue}}", cat.text)
+    situation_part = (
+        f"## Clinician situation\nPresent tense means as of {reference_date or 'unknown'}.\n\n{situation}"
     )
-    return await get_client().generate(
+    out: PickOutput = await get_client().generate(
         prompt_name="fp_select",
-        messages=[{"role": "user", "content": prompt}],
-        response_schema=SelectOutput,
+        messages=[{"role": "user", "content": [{"text": fixed, "cache": True}, {"text": situation_part}]}],
+        response_schema=PickOutput,
         temperature=0.0,
         model=settings.RUNTIME_MODEL,
     )
+    return SelectOutput(role=out.role, task=out.task, variables=[
+        SelectedVariable(
+            name=_name(v.label), label=v.label,
+            concept_ids=[cat.resolve(h) for h in v.concepts],
+            fact_ids=[cat.resolve(h) for h in v.facts],
+            time_scope=v.scope, priority=v.priority,
+        )
+        for v in out.variables
+    ])
+
+
+def _own_passage_ids(fid: str, store: FactStore) -> list[str]:
+    """The passage(s) a fact was extracted from; for a derived fact, those of its inputs."""
+    fact = store.get_fact(fid)
+    if fact is not None:
+        return [fact.passage_id]
+    df = store.derived.get(fid)
+    if df and df.fields.get("passage_id"):  # computed from one passage, e.g. age from the date of birth
+        return [df.fields["passage_id"]]
+    return [pid for inp in (df.inputs if df else []) for pid in _own_passage_ids(inp, store)]
 
 
 def _sources_for_facts(fact_ids: list[str], store: FactStore) -> list[Source]:
+    """
+    Each fact's own passage first – so "current medication" links the newest letter, not
+    the 2015 letter the row was copied from – then the original of an exact copy.
+    """
     sources: list[Source] = []
     seen: set[str] = set()
     for fid in fact_ids:
-        pid = _best_passage_id(fid, store)
-        if pid and pid not in seen:
-            seen.add(pid)
-            src = _build_source(pid, store)
-            if src:
-                sources.append(src)
+        for pid in _own_passage_ids(fid, store) + [_best_passage_id(fid, store)]:
+            if pid and pid not in seen:
+                seen.add(pid)
+                src = _build_source(pid, store)
+                if src:
+                    sources.append(src)
     return sources
 
 
-def _documented_variable(v: SelectedVariable, store: FactStore, t0: float) -> Optional[ScreenVariable]:
-    """Validate a documented variable. None → treat it as missing and derive it."""
-    item = AnswererItem(need_id=v.name, fact_ids=v.fact_ids, text_en=v.value, absent=False)
-    result = validate_item(item, store.get_any_fact, [])
-    if not v.value.strip():
-        # A small model sometimes cites facts but writes no value: treat as not passed
-        result.fail("empty value")
-    if result.passed:
-        return ScreenVariable(
-            name=v.name, label=v.label, state="documented", value=v.value,
-            fact_ids=v.fact_ids, sources=_sources_for_facts(v.fact_ids, store),
-            priority=v.priority, resolved_ms=_elapsed_ms(t0),
-        )
+def _known_on(f: Fact | DerivedFact, store: FactStore) -> str:
+    """
+    The date the record knew a fact: the date of its letter. A plan "scheduled for 16 May
+    2016" in the letter of 15 April is known on 15 April, though its own date is in May.
+    """
+    passage_id = getattr(f, "passage_id", None)
+    doc = store.get_document(passage_id.split(":")[0]) if passage_id else None
+    return (doc.date if doc and doc.date else None) or f.date or ""
 
-    logger.warning("fastpath: select value for %s rejected: %s", v.name, result.errors)
-    valid = [f for f in (store.get_any_fact(fid) for fid in v.fact_ids) if f is not None]
-    if not valid:
+
+def resolve_facts(v: SelectedVariable, store: FactStore, reference_date: str) -> list[Fact | DerivedFact]:
+    """
+    Pull the facts a variable points at, purely in code:
+      - fact_ids: taken as they are; IDs that do not exist are dropped.
+      - concept_ids: all facts of the concept up to the reference date; with time_scope
+        "latest" only those of the newest date, with "all" the whole history.
+    Returned oldest first, without duplicates.
+    """
+    picked: dict[str, Fact | DerivedFact] = {}
+    for fid in v.fact_ids:
+        f = store.get_any_fact(fid)
+        if f is None:
+            logger.warning("fastpath: %s cites unknown fact %s – dropped", v.name, fid)
+        else:
+            picked.setdefault(f.fact_id, f)
+
+    for cid in v.concept_ids:
+        facts = [f for f in store.facts_by_concept(cid) if not reference_date or _known_on(f, store) <= reference_date]
+        if not facts:
+            if cid not in store.concepts:
+                logger.warning("fastpath: %s cites unknown concept %s – dropped", v.name, cid)
+            continue
+        if v.time_scope == "latest":
+            newest = max(f.date or "" for f in facts)
+            facts = [f for f in facts if (f.date or "") == newest]
+        for f in facts:
+            picked.setdefault(f.fact_id, f)
+
+    # A recommendation is shown as its follow-up status ("Follow-up open: … – no record in the
+    # 3 later documents"), which repeats the recommendation and says what became of it
+    followups = {d.fields.get("rec_fact_id"): d for d in store.derived.values() if d.formula == "followup_status"}
+    for fid in list(picked):
+        if fid in followups:
+            del picked[fid]
+            picked.setdefault(followups[fid].fact_id, followups[fid])
+
+    # A derived fact that only restates facts already picked (e.g. "Current medication: X"
+    # next to the medication row X itself) would show the same value twice
+    for fid, f in list(picked.items()):
+        inputs = getattr(f, "inputs", None)
+        if f.type == "derived" and inputs and all(i in picked for i in inputs):
+            del picked[fid]
+
+    return sorted(picked.values(), key=lambda f: f.date or "")
+
+
+def render_value(facts: list[Fact | DerivedFact]) -> str:
+    """The screen value: the stored English text of each fact with its date, oldest first."""
+    parts: list[str] = []
+    for f in facts:
+        text = (f.en or getattr(f, "span", "")).strip().rstrip(".")
+        if f.date and f.type != "derived" and f.date not in text:
+            text = f"{text} ({f.date})"
+        if text and text not in parts:  # the same statement copied into several letters
+            parts.append(text)
+    return "; ".join(parts)
+
+
+def _documented_variable(
+    v: SelectedVariable, store: FactStore, reference_date: str, t0: float,
+) -> Optional[ScreenVariable]:
+    """Documented variable built from the fact store. None → no fact found, derive it."""
+    facts = resolve_facts(v, store, reference_date)
+    if not facts:
         return None
-    # Never show the rejected LLM text; fall back to the stored renderings of real facts
+    fact_ids = [f.fact_id for f in facts]
     return ScreenVariable(
         name=v.name, label=v.label, state="documented",
-        value="; ".join(f.en or getattr(f, "span", "") for f in valid),
-        fact_ids=[f.fact_id for f in valid],
-        sources=_sources_for_facts([f.fact_id for f in valid], store),
-        note="Summary replaced by stored fact text (validation failed)",
+        value=render_value(facts),
+        fact_ids=fact_ids, sources=_sources_for_facts(fact_ids, store),
         priority=v.priority, resolved_ms=_elapsed_ms(t0),
     )
 
@@ -165,10 +296,22 @@ def _check_derive(out: DeriveOutput, store: FactStore) -> list[str]:
     for q in out.quotes:
         if _ws(q) not in passage_text:
             errors.append(f"quote not verbatim in cited passages: {q[:60]!r}")
-    # Numbers must be backed by the cited passages themselves, not by (possibly invented) quotes
-    for n in _numbers(out.value) - _numbers(passage_text):
+    # Numbers must be backed by the cited passages themselves, not by (possibly invented) quotes.
+    # The letter's date counts too: the prompt shows it with every passage ("in June 2015").
+    backed = _numbers(passage_text) | _letter_date_numbers(passages, store)
+    for n in _numbers(out.value) - backed:
         errors.append(f"number {n} in value not found in the cited passages")
     return errors
+
+
+def _letter_date_numbers(passages: list, store: FactStore) -> set[str]:
+    numbers: set[str] = set()
+    for p in passages:
+        doc = store.get_document(p.doc_id) if p else None
+        if doc and doc.date and len(doc.date) == 10:
+            y, m, d = doc.date.split("-")
+            numbers |= _numbers(f"{doc.date} {d}.{m}.{y} {int(d)}.{int(m)}.{y}")
+    return numbers
 
 
 async def _derive_one(
@@ -179,20 +322,18 @@ async def _derive_one(
     sem: asyncio.Semaphore,
     t0: float,
 ) -> None:
-    prompt = (
-        _prompt("fp_derive")
-        .replace("{{name}}", var.name)
-        .replace("{{label}}", var.label)
-        .replace("{{role}}", screen.role or "clinician")
-        .replace("{{task}}", screen.task or screen.situation)
-        .replace("{{reference_date}}", screen.reference_date or "unknown")
-        .replace("{{passages}}", passages)
+    # Rules and passages are the same for every variable: a cacheable first part
+    fixed = _prompt("fp_derive").replace("{{passages}}", passages)
+    variable_part = (
+        f"## Variable\n- Name: {var.name}\n- Label: {var.label}\n"
+        f"- Clinician role and task: {screen.role or 'clinician'} – {screen.task or screen.situation}\n"
+        f"- Reference date (present tense means as of): {screen.reference_date or 'unknown'}"
     )
     try:
         async with sem:
             out: DeriveOutput = await get_client().generate(
                 prompt_name="fp_derive",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": [{"text": fixed, "cache": True}, {"text": variable_part}]}],
                 response_schema=DeriveOutput,
                 temperature=0.0,
                 model=settings.RUNTIME_MODEL,
@@ -289,7 +430,7 @@ async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
     screen.role, screen.task = selected.role, selected.task
     screen.timings_ms["select"] = _elapsed_ms(t0)
     for v in sorted(selected.variables, key=lambda v: v.priority):
-        documented = _documented_variable(v, store, t0) if v.documented and v.fact_ids else None
+        documented = _documented_variable(v, store, screen.reference_date or "", t0)
         screen.variables.append(documented or ScreenVariable(
             name=v.name, label=v.label, state="pending", priority=v.priority,
         ))

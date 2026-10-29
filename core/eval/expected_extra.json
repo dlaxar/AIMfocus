@@ -86,8 +86,8 @@
    "answer": "Gastro-oesophageal reflux disease grade II, with a small axial hiatus hernia (2015).", "sources": ["12340012", "12340014", "12340018"]},
   {"id": "15.2", "situation": "Gastroenterologist – reflux", "question": "Does she take an acid-suppressing drug?",
    "answer": "Not documented: no proton pump inhibitor or other acid-suppressing drug is on her medication lists.", "sources": []},
-  {"id": "15.3", "situation": "Gastroenterologist – reflux", "question": "What did the rectal examination in June 2015 show?",
-   "answer": "Sphincter well innervated, empty ampulla, no palpable masses, no visible blood on the glove.", "sources": ["12340012"]},
+  {"id": "15.3", "situation": "Gastroenterologist – reflux", "question": "Which of her current medicines can irritate the oesophagus or stomach?",
+   "answer": "Alendronic acid 70 mg once a week (oesophageal irritation) and aspirin (Thrombo ASS) 100 mg in the morning (gastric mucosa).", "sources": ["12340012", "12340018"]},
 
   {"id": "16.1", "situation": "Dentist – planned tooth extraction", "question": "Does she take a bisphosphonate, at what dose?",
    "answer": "Yes. Alendronate 70 mg, one tablet once a week (since at least June 2015).", "sources": ["12340012", "12340018"]},
