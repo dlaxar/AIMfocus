@@ -9,6 +9,14 @@ function toBase64(text) {
   return btoa(binary)
 }
 
+// Searches patients by name or ID. Returns array of { id, name, dob, ward }.
+export async function searchPatients(q, limit = 10) {
+  const url = `${BASE_URL}/patients/search?q=${encodeURIComponent(q)}&limit=${limit}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Patient search failed (${res.status})`)
+  return res.json()
+}
+
 // Creates a session for the given situation and returns its ID.
 export async function createSession(situation) {
   const url = `${BASE_URL}/session/get?situation=${encodeURIComponent(toBase64(situation))}`

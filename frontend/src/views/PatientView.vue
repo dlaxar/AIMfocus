@@ -1,25 +1,32 @@
 <template>
   <label class="field">
     <span class="label">Patient</span>
-    <input v-model="form.patient" type="text" placeholder="Name or ID" @keyup.enter="next" />
+    <PatientAutocomplete v-model="selectedPatient" @keyup.enter="next" />
   </label>
 
-  <NextButton :disabled="!form.patient.trim()" @click="next" />
+  <NextButton :disabled="!selectedPatient" @click="next" />
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
 import NextButton from '../components/NextButton.vue'
+import PatientAutocomplete from '../components/PatientAutocomplete.vue'
 import { form } from '../store.js'
 
+const selectedPatient = ref(null)
+
+// Keep store in sync so later views can read form.patient
+watch(selectedPatient, (p) => {
+  form.patient = p ? p.id : ''
+})
+
 function next() {
-  if (!form.patient.trim()) return
-  // TODO: send to backend, e.g. fetch('/api/intake', { method: 'POST', body: JSON.stringify(form) })
-  console.log('Collected:', { ...form })
+  if (!selectedPatient.value) return
+  console.log('Selected patient:', selectedPatient.value)
 }
 </script>
 
 <style scoped>
-/* The sketch puts the field in the middle of the screen */
 .field {
   margin-top: auto;
   display: flex;
@@ -28,8 +35,5 @@ function next() {
 }
 .label {
   font-size: 1.75rem;
-}
-input {
-  padding: 14px 16px;
 }
 </style>
