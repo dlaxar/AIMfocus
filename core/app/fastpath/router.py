@@ -1,0 +1,139 @@
+"""
+app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
+
+  GET  /api/v2/schema                     fact-store structure (types, fields, concepts)
+  GET  /api/v2/concepts[?type=]           concepts, optionally filtered by fact type
+  GET  /api/v2/concepts/{concept_id}      one concept with its facts and sources
+  GET  /api/v2/facts/{fact_id}            one fact (or derived fact) with its source
+  POST /api/v2/screens                    {"situation": ...} → 202, documented part at once
+  GET  /api/v2/screens?situation=...      same, for quick tests from a browser / curl
+  GET  /api/v2/screens/{id}[?wait=true]   current state; wait=true blocks until complete
+  GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update, then "done"
+"""
+from __future__ import annotations
+
+import asyncio
+from typing import Any, AsyncGenerator, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from app.fastpath import service
+from app.fastpath.models import FastScreen, ScreenRequest
+from app.runtime.screen import _best_passage_id, _build_source
+from app.schemas import Fact
+from app.store import get_store
+
+router = APIRouter(prefix="/api/v2", tags=["fast path (mockup)"])
+
+
+# ---------------------------------------------------------------------------
+# Fact store
+# ---------------------------------------------------------------------------
+
+@router.get("/schema")
+async def get_schema() -> dict[str, Any]:
+    store = get_store()
+    by_type: dict[str, int] = {}
+    for f in store.facts.values():
+        by_type[f.type] = by_type.get(f.type, 0) + 1
+    return {
+        "patient_reference_date": store.reference_date(),
+        "fact_fields": {name: str(field.annotation) for name, field in Fact.model_fields.items()},
+        "fact_counts_by_type": by_type,
+        "derived_fact_count": len(store.derived),
+        "concepts": [
+            {"concept_id": c.concept_id, "type": c.type, "label_en": c.label_en, "fact_count": len(c.fact_ids)}
+            for c in sorted(store.concepts.values(), key=lambda c: c.concept_id)
+        ],
+    }
+
+
+@router.get("/concepts")
+async def list_concepts(type: Optional[str] = None) -> list[dict[str, Any]]:
+    store = get_store()
+    return [
+        {"concept_id": c.concept_id, "type": c.type, "label_en": c.label_en, "fact_count": len(c.fact_ids)}
+        for c in sorted(store.concepts.values(), key=lambda c: c.concept_id)
+        if type is None or c.type == type
+    ]
+
+
+def _fact_payload(fact_id: str) -> dict[str, Any]:
+    store = get_store()
+    fact = store.get_any_fact(fact_id)
+    if fact is None:
+        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found")
+    pid = _best_passage_id(fact_id, store)
+    source = _build_source(pid, store) if pid else None
+    return {**fact.model_dump(), "source": source.model_dump() if source else None}
+
+
+@router.get("/concepts/{concept_id}")
+async def get_concept(concept_id: str) -> dict[str, Any]:
+    store = get_store()
+    concept = store.concepts.get(concept_id)
+    if concept is None:
+        raise HTTPException(status_code=404, detail=f"Concept '{concept_id}' not found")
+    return {**concept.model_dump(), "facts": [_fact_payload(fid) for fid in concept.fact_ids]}
+
+
+@router.get("/facts/{fact_id}")
+async def get_fact(fact_id: str) -> dict[str, Any]:
+    return _fact_payload(fact_id)
+
+
+# ---------------------------------------------------------------------------
+# Screens
+# ---------------------------------------------------------------------------
+
+async def _create(situation: str) -> JSONResponse:
+    if not situation.strip():
+        raise HTTPException(status_code=422, detail="situation must not be empty")
+    screen = await service.create_screen(situation, get_store())
+    code = 200 if screen.status == "complete" else 202
+    return JSONResponse(
+        status_code=code,
+        content=screen.model_dump(),
+        headers={"Location": f"/api/v2/screens/{screen.screen_id}"},
+    )
+
+
+@router.post("/screens", response_model=FastScreen, status_code=202)
+async def post_screen(req: ScreenRequest) -> JSONResponse:
+    return await _create(req.situation)
+
+
+@router.get("/screens", response_model=FastScreen)
+async def get_screen_by_situation(situation: str = Query(..., min_length=1)) -> JSONResponse:
+    return await _create(situation)
+
+
+@router.get("/screens/{screen_id}", response_model=FastScreen)
+async def get_screen(screen_id: str, wait: bool = False) -> FastScreen:
+    screen = await service.wait_for(screen_id) if wait else service.get_screen(screen_id)
+    if screen is None:
+        raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
+    return screen
+
+
+@router.get("/screens/{screen_id}/stream")
+async def stream_screen(screen_id: str) -> StreamingResponse:
+    if service.get_screen(screen_id) is None:
+        raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
+
+    async def _events() -> AsyncGenerator[str, None]:
+        last_version = -1
+        while True:
+            screen = service.get_screen(screen_id)
+            if screen is None:
+                return
+            if screen.version != last_version:
+                last_version = screen.version
+                yield f"event: screen\ndata: {service.screen_json(screen)}\n\n"
+            if screen.status == "complete":
+                yield "event: done\ndata: {}\n\n"
+                return
+            await asyncio.sleep(0.2)
+
+    return StreamingResponse(_events(), media_type="text/event-stream")

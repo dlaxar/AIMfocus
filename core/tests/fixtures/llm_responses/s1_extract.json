@@ -1,0 +1,92 @@
+{
+  "facts": [
+    {
+      "passage_id": "TEST001:p000",
+      "no_clinical_content": false,
+      "type": "allergy",
+      "span": "Kontrastmittel (Uebelkeit, Schwindel)",
+      "fields": {
+        "substance": "contrast media",
+        "reaction": [
+          "nausea",
+          "dizziness"
+        ]
+      },
+      "status": "positive",
+      "laterality": "",
+      "date": "2016-06-01",
+      "date_precision": "day",
+      "date_basis": "document_date",
+      "en": "Contrast media allergy (nausea, dizziness)",
+      "de": "Kontrastmittel (Uebelkeit, Schwindel)",
+      "concept_key": "allergy:contrast_media",
+      "concept_label_en": "Contrast media allergy"
+    },
+    {
+      "passage_id": "TEST001:p001",
+      "no_clinical_content": false,
+      "type": "medication",
+      "span": "Testopril 5mg oral 1 0 0 0 ST",
+      "fields": {
+        "brand": "Testopril",
+        "generic": "testoprilat",
+        "strength": "5 mg",
+        "schedule": "1-0-0",
+        "route": "oral",
+        "drug_class": "antihypertensive"
+      },
+      "status": "current",
+      "laterality": "",
+      "date": "2016-06-01",
+      "date_precision": "day",
+      "date_basis": "document_date",
+      "en": "Testoprilat (Testopril) 5 mg, 1-0-0",
+      "de": "Testopril 5mg oral 1 0 0 0 ST",
+      "concept_key": "med:testoprilat",
+      "concept_label_en": "Testoprilat"
+    },
+    {
+      "passage_id": "TEST001:p002",
+      "no_clinical_content": false,
+      "type": "medication",
+      "span": "Glucophage 500mg oral 1 1 1 0 ST",
+      "fields": {
+        "brand": "Glucophage",
+        "generic": "metformin",
+        "strength": "500 mg",
+        "schedule": "1-1-1",
+        "route": "oral",
+        "drug_class": "biguanide"
+      },
+      "status": "current",
+      "laterality": "",
+      "date": "2016-06-01",
+      "date_precision": "day",
+      "date_basis": "document_date",
+      "en": "Metformin (Glucophage) 500 mg, 1-1-1",
+      "de": "Glucophage 500mg oral 1 1 1 0 ST",
+      "concept_key": "med:metformin",
+      "concept_label_en": "Metformin"
+    },
+    {
+      "passage_id": "TEST001:p003",
+      "no_clinical_content": false,
+      "type": "measurement",
+      "span": "Gewicht: 70 kg",
+      "fields": {
+        "name": "Gewicht",
+        "value": 70,
+        "unit": "kg"
+      },
+      "status": "positive",
+      "laterality": "",
+      "date": "2016-06-01",
+      "date_precision": "day",
+      "date_basis": "document_date",
+      "en": "Body weight 70 kg",
+      "de": "Gewicht: 70 kg",
+      "concept_key": "meas:body_weight",
+      "concept_label_en": "Body weight"
+    }
+  ]
+}

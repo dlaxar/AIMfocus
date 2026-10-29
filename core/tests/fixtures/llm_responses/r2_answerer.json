@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "need_id": "N1",
+      "fact_ids": [],
+      "text_en": "Not documented",
+      "absent": true
+    },
+    {
+      "need_id": "N2",
+      "fact_ids": ["F:TEST001:all:01"],
+      "text_en": "Contrast media allergy (nausea, dizziness)",
+      "absent": false
+    },
+    {
+      "need_id": "N3",
+      "fact_ids": [],
+      "text_en": "Not documented",
+      "absent": true
+    }
+  ]
+}

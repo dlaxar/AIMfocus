@@ -1,0 +1,12 @@
+{
+  "role": "anaesthetist",
+  "task": "pre-operative check",
+  "variables": [
+    {"name": "contrast_allergy", "label": "Allergies", "value": "Contrast media allergy (nausea, dizziness)",
+     "fact_ids": ["F:TEST001:all:01"], "documented": true, "priority": 1},
+    {"name": "antithrombotic_medication", "label": "Antithrombotic medication", "value": "",
+     "fact_ids": [], "documented": false, "priority": 1},
+    {"name": "kidney_function", "label": "Kidney function", "value": "",
+     "fact_ids": [], "documented": false, "priority": 2}
+  ]
+}

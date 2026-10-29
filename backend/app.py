@@ -1,8 +1,10 @@
 import base64
 import json
 import os
+import urllib.error
+import urllib.request
 
-from flask import Flask, abort, jsonify, request
+from flask import Flask, Response, abort, jsonify, request, stream_with_context
 
 app = Flask(__name__)
 
@@ -26,6 +28,29 @@ _PATIENTS = _load_patients()
 
 
 # ---------------------------------------------------------------------------
+# Core service (core/, FastAPI): fact store, LLM pipeline, validation
+# ---------------------------------------------------------------------------
+CORE_URL = os.environ.get("CORE_URL", "http://127.0.0.1:8001").rstrip("/")
+
+
+def _core(method, path, payload=None):
+    """Call the core service and return its JSON; map its errors onto Flask errors."""
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        f"{CORE_URL}{path}", data=data, method=method,
+        headers={"Content-Type": "application/json"} if data else {},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        abort(e.code, e.read().decode("utf-8", "replace"))
+    except urllib.error.URLError:
+        abort(503, f"Core service not reachable at {CORE_URL}. Start it with: "
+                   "cd core && uvicorn app.main:app --port 8001")
+
+
+# ---------------------------------------------------------------------------
 # The frontend dev server proxies /api/* here unchanged, so routes keep the /api prefix.
 # ---------------------------------------------------------------------------
 @app.get("/api/session/get")
@@ -39,8 +64,42 @@ def get_session():
         abort(400, "'situation' must be base64-encoded UTF-8")
 
     app.logger.info("New session for situation: %s", situation)
-    # TODO: create a real session; a fixed ID is enough for the prototype
-    return "1"
+    # The core service answers from its fact store at once and keeps searching the raw
+    # text for missing items in the background, so the screen fills while the user
+    # picks the patient. The session ID is the core screen ID.
+    screen = _core("POST", "/api/v2/screens", {"situation": situation})
+    return jsonify(session_id=screen["screen_id"], screen=screen)
+
+
+@app.get("/api/session/<session_id>")
+def get_session_screen(session_id):
+    """Current screen of a session. ?wait=true blocks until the background search is done."""
+    wait = "?wait=true" if request.args.get("wait") == "true" else ""
+    return jsonify(_core("GET", f"/api/v2/screens/{session_id}{wait}"))
+
+
+@app.get("/api/session/<session_id>/stream")
+def stream_session_screen(session_id):
+    """Server-sent events from the core: one "screen" event per update, then "done"."""
+    try:
+        upstream = urllib.request.urlopen(f"{CORE_URL}/api/v2/screens/{session_id}/stream", timeout=60)
+    except urllib.error.HTTPError as e:
+        abort(e.code, e.read().decode("utf-8", "replace"))
+    except urllib.error.URLError:
+        abort(503, f"Core service not reachable at {CORE_URL}")
+
+    def relay():
+        with upstream:
+            for line in upstream:
+                yield line
+
+    return Response(stream_with_context(relay()), mimetype="text/event-stream")
+
+
+@app.get("/api/documents/<doc_id>")
+def get_document(doc_id):
+    """Normalized document text + passages with offsets, for highlighting a source."""
+    return jsonify(_core("GET", f"/api/documents/{doc_id}"))
 
 
 @app.get("/api/patients/search")

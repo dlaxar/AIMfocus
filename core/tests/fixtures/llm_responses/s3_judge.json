@@ -1,0 +1,5 @@
+{
+  "verdict": "contradiction",
+  "confidence": 0.95,
+  "rationale": "Fixture: always returns contradiction for testing."
+}

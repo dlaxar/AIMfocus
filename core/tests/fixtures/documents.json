@@ -1,0 +1,18 @@
+[
+  {
+    "doc_id": "TEST001",
+    "title": "Arztbrief (Test)",
+    "date": "2016-06-01",
+    "type": "Arztbrief",
+    "department": "Innere Medizin",
+    "text": "Sehr geehrter Herr Kollege,\n\nwir berichten ueber Frau Test, geboren 01.01.1960.\n\nDiagnosen:\n- Arterielle Hypertonie\n- Diabetes mellitus Typ 2\n\nAllergien:\nKontrastmittel (Uebelkeit, Schwindel)\n\nEntlassungsmedikation:\nTestopril 5mg oral 1 0 0 0 ST\nGlucophage 500mg oral 1 1 1 0 ST\n\nGewicht: 70 kg\nGroesse: 170 cm\n\nWir bitten um weitere Betreuung.\n\nMit freundlichen Gruessen\nDr. Testmann"
+  },
+  {
+    "doc_id": "TEST002",
+    "title": "Befund Duplex",
+    "date": "2016-07-15",
+    "type": "Befund",
+    "department": "Radiologie",
+    "text": "Duplex-Sonographie der Halsgefaesse vom 15.07.2016.\n\nBefund:\nA. carotis interna links: Stenose ca. 50%.\nA. carotis interna rechts: unauffaellig.\n\nBeurteilung: Linksseitige ICA-Stenose ca. 50%."
+  }
+]

@@ -4,14 +4,36 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev"
+      ],
       "port": 5173
     },
     {
       "name": "backend",
       "runtimeExecutable": "backend/.venv/bin/python",
-      "runtimeArgs": ["backend/app.py"],
+      "runtimeArgs": [
+        "backend/app.py"
+      ],
       "port": 8000,
+      "autoPort": false
+    },
+    {
+      "name": "core",
+      "runtimeExecutable": "core/.venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "core",
+        "--port",
+        "8001"
+      ],
+      "port": 8001,
       "autoPort": false
     }
   ]

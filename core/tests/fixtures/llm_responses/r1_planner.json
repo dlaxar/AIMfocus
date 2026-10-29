@@ -1,0 +1,33 @@
+{
+  "role": "anaesthetist",
+  "task": "pre-op check",
+  "needs": [
+    {
+      "need_id": "N1",
+      "label": "Antithrombotic / anticoagulant medication",
+      "category": "medication",
+      "filter": {"drug_class": ["antithrombotic", "anticoagulant", "antiplatelet"]},
+      "time_scope": "current",
+      "report_absence": true,
+      "priority": 1
+    },
+    {
+      "need_id": "N2",
+      "label": "Allergies",
+      "category": "allergy",
+      "filter": {},
+      "time_scope": "all",
+      "report_absence": true,
+      "priority": 1
+    },
+    {
+      "need_id": "N3",
+      "label": "Kidney function",
+      "category": "measurement",
+      "filter": {"name": "creatinine"},
+      "time_scope": "latest",
+      "report_absence": true,
+      "priority": 2
+    }
+  ]
+}

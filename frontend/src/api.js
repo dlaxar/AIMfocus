@@ -35,3 +35,23 @@ export async function createSession(situation) {
   }
   throw new Error('Session response did not contain an ID')
 }
+
+// Current screen of a session: { status: 'partial'|'complete', role, task, variables[], contradictions[] }.
+export async function getScreen(sessionId) {
+  const res = await fetch(`${BASE_URL}/session/${encodeURIComponent(sessionId)}`)
+  if (!res.ok) throw new Error(`Screen request failed (${res.status})`)
+  return res.json()
+}
+
+// Live updates while the backend searches the documents for missing items.
+// Calls onScreen(screen) for every update; returns a function that stops listening.
+export function watchScreen(sessionId, onScreen, onError) {
+  const source = new EventSource(`${BASE_URL}/session/${encodeURIComponent(sessionId)}/stream`)
+  source.addEventListener('screen', (e) => onScreen(JSON.parse(e.data)))
+  source.addEventListener('done', () => source.close())
+  source.onerror = () => {
+    source.close()
+    onError?.()
+  }
+  return () => source.close()
+}
