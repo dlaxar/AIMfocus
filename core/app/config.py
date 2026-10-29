@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     # Google's SDK convention is GOOGLE_API_KEY; GEMINI_API_KEY is accepted too
     GEMINI_API_KEY: str = Field(default="", validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
 
+    # Measured 2026-10-29 on the select prompt (~29k chars): 3.8-flash default 15.7 s,
+    # 3.8-flash thinking=low 9.0 s, 3.5-flash thinking=minimal 5.1 s (3.8 does not support "minimal")
     RUNTIME_MODEL: str = "gemini-3.8-flash"
+    RUNTIME_THINKING_LEVEL: str = "low"         # applied to RUNTIME_MODEL calls; "" = model default
     PREPROCESS_MODEL: str = "gemini-3.1-pro-preview"
 
     LLM_FAKE: bool = False

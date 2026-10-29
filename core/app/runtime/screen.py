@@ -56,10 +56,12 @@ def _best_passage_id(fact_id: str, store: FactStore) -> Optional[str]:
     if p is None:
         return fact.passage_id
 
-    # If this passage is a copy, use the original
+    # If this passage is an exact copy, use the original. A near-copy that differs
+    # (e.g. "Blopress 16mg 1 0 1/2" in 2015 vs "1 0 1" in 2016) must keep its own
+    # passage, or the link would show a different value than the fact.
     if p.copy_of:
         orig = store.get_passage(p.copy_of)
-        if orig:
+        if orig and " ".join(orig.text.lower().split()) == " ".join(p.text.lower().split()):
             return orig.passage_id
     return p.passage_id
 

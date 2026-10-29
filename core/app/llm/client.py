@@ -139,6 +139,11 @@ class GeminiClient(LLMClient):
         if response_schema is not None:
             config_kwargs["response_mime_type"] = "application/json"
             config_kwargs["response_json_schema"] = response_schema.model_json_schema()
+        # Runtime calls are latency-bound: thinking roughly triples the select call
+        if model_name == settings.RUNTIME_MODEL and settings.RUNTIME_THINKING_LEVEL:
+            config_kwargs["thinking_config"] = self._types.ThinkingConfig(
+                thinking_level=settings.RUNTIME_THINKING_LEVEL
+            )
 
         response = await self._client.aio.models.generate_content(
             model=model_name,
