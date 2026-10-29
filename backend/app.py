@@ -1,26 +1,28 @@
 import base64
+import json
+import os
 
 from flask import Flask, abort, jsonify, request
 
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Demo patient data
+# Patient data loaded from data/{patient-dir}/patient.json at startup
 # ---------------------------------------------------------------------------
-_PATIENTS = [
-    {"id": "P001", "name": "Alice Müller", "dob": "1985-03-14", "ward": "Cardiology"},
-    {"id": "P002", "name": "Bob Fischer", "dob": "1972-07-22", "ward": "Neurology"},
-    {"id": "P003", "name": "Clara Schneider", "dob": "1990-11-05", "ward": "Oncology"},
-    {"id": "P004", "name": "David Wagner", "dob": "1965-01-30", "ward": "Orthopedics"},
-    {"id": "P005", "name": "Eva Becker", "dob": "2001-09-18", "ward": "Pediatrics"},
-    {"id": "P006", "name": "Frank Hoffmann", "dob": "1958-06-02", "ward": "Cardiology"},
-    {"id": "P007", "name": "Greta Koch", "dob": "1979-12-25", "ward": "Neurology"},
-    {"id": "P008", "name": "Hans Richter", "dob": "1943-04-11", "ward": "Geriatrics"},
-    {"id": "P009", "name": "Ingrid Bauer", "dob": "1995-08-07", "ward": "Emergency"},
-    {"id": "P010", "name": "Jan Krause", "dob": "1988-02-19", "ward": "Orthopedics"},
-    {"id": "P011", "name": "Klara Lange", "dob": "2010-05-23", "ward": "Pediatrics"},
-    {"id": "P012", "name": "Leon Schmitt", "dob": "1970-10-31", "ward": "Oncology"},
-]
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+
+def _load_patients():
+    patients = []
+    for entry in sorted(os.listdir(_DATA_DIR)):
+        patient_json = os.path.join(_DATA_DIR, entry, "patient.json")
+        if os.path.isfile(patient_json):
+            with open(patient_json, encoding="utf-8") as f:
+                data = json.load(f)
+            data.pop("ward", None)
+            patients.append(data)
+    return patients
+
+_PATIENTS = _load_patients()
 
 
 # ---------------------------------------------------------------------------
