@@ -58,6 +58,20 @@ cd frontend && npm install && npm run dev                   # http://localhost:5
 
 Tests (no API key needed): `cd core && LLM_FAKE=true .venv/bin/python -m pytest tests`.
 
+## Results on the 5 situations (2026-10-29)
+
+Fast path via `python -m eval.run_eval --v2`, runtime `gemini-3.8-flash` (thinking low), answers checked by hand against `cases/expected.json`.
+
+| Metric | Result | Target |
+|---|---|---|
+| Correct answers | 15 of 15 (manual check) | 15 of 15 |
+| Traceability | 100% (116/116 sources point to the quoted passage) | 100% |
+| Invented facts | 0 validator drops | 0 |
+| Contradictions | not implemented yet (in progress) | 5 or more |
+| Load time | 9.9–12.7 s until the screen is complete | under 10 s |
+
+The fact store was extracted offline (`preprocess.run --offline-llm`) with Claude using the same S1 prompt and validation as the Gemini path; the app itself only uses Gemini at runtime.
+
 ## Repository layout
 | Path | What |
 |---|---|
