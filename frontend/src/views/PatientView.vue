@@ -1,5 +1,9 @@
 <template>
-  <p class="role-badge" role="button" tabindex="0" @click="router.push('/')" @keyup.enter="router.push('/')">{{ displayLabel }}</p>
+  <div class="situation-block">
+    <p class="situation-label">{{ displayLabel }}</p>
+    <p v-if="situationText !== displayLabel" class="situation-text">{{ situationText }}</p>
+    <router-link class="edit-link" to="/">Edit</router-link>
+  </div>
 
   <label class="field">
     <span class="label">Patient</span>
@@ -30,11 +34,14 @@ function next() {
   router.push({ path: '/patient/dashboard', state: { patient: selectedPatient.value } })
 }
 
-// Display the LLM summary if available, otherwise fall back to the raw prompt
+// LLM summary as heading; fall back to the raw prompt
 const displayLabel = computed(() => {
   const entry = session.recent.find((s) => s.id === session.currentId)
   return entry?.summary ?? form.iAm
 })
+
+// Full situation text shown beneath the summary heading
+const situationText = computed(() => form.iAm)
 
 onMounted(async () => {
   const id = session.currentId
@@ -52,26 +59,33 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.role-badge {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 20px;
-  padding: 4px 14px;
-  align-self: flex-start;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  cursor: pointer;
+.situation-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.role-badge:hover {
-  background: var(--border, #e5e7eb);
+.situation-label {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.situation-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.edit-link {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+  align-self: flex-start;
+}
+.edit-link:hover {
+  text-decoration: underline;
 }
 .field {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;

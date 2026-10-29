@@ -24,7 +24,7 @@ body {
   max-width: 420px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 48px 24px 32px;
+  padding: 48px 24px 100px;
   display: flex;
   flex-direction: column;
   gap: 24px;
