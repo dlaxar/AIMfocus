@@ -9,10 +9,12 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
 import PatientAutocomplete from '../components/PatientAutocomplete.vue'
 import { form } from '../store.js'
 
+const router = useRouter()
 const selectedPatient = ref(null)
 
 // Keep store in sync so later views can read form.patient
@@ -22,7 +24,7 @@ watch(selectedPatient, (p) => {
 
 function next() {
   if (!selectedPatient.value) return
-  console.log('Selected patient:', selectedPatient.value)
+  router.push({ path: '/patient/dashboard', state: { patient: selectedPatient.value } })
 }
 </script>
 
