@@ -35,7 +35,9 @@
 
   <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-  <NextButton :disabled="!form.iAm.trim() || loading" @click="submit" />
+  <Teleport to="body">
+    <NextButton :disabled="!form.iAm.trim() || loading" @click="submit" />
+  </Teleport>
 </template>
 
 <script setup>
@@ -113,7 +115,7 @@ onBeforeUnmount(() => recognition?.stop())
 }
 textarea {
   width: 100%;
-  min-height: 240px;
+  min-height: 120px;
   padding: 16px 56px 16px 16px;
   resize: vertical;
 }

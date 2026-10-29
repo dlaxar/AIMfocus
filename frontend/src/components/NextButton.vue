@@ -10,11 +10,11 @@
 defineProps({ disabled: Boolean })
 </script>
 
-<style scoped>
+<style>
 .next {
   position: fixed;
   bottom: 32px;
-  right: max(24px, calc(50vw - 210px + 24px));
+  right: 24px;
   width: 56px;
   height: 56px;
   border: none;

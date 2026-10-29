@@ -10,7 +10,9 @@
     <PatientAutocomplete v-model="selectedPatient" @keyup.enter="next" />
   </label>
 
-  <NextButton :disabled="!selectedPatient" @click="next" />
+  <Teleport to="body">
+    <NextButton :disabled="!selectedPatient" @click="next" />
+  </Teleport>
 </template>
 
 <script setup>
