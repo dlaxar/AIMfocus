@@ -1,5 +1,5 @@
 <template>
-  <h1>I am</h1>
+  <h1>What are you looking for?</h1>
 
   <div class="box">
     <textarea v-model="form.iAm" placeholder="Type or tap the mic to speak…" />
