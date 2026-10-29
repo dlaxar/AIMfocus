@@ -17,16 +17,57 @@
     </button>
   </div>
 
-  <NextButton :disabled="!form.iAm.trim()" @click="router.push('/patient')" />
+  <section v-if="session.recent.length" class="recent">
+    <h2>Recent</h2>
+    <ul>
+      <li v-for="s in session.recent" :key="s.id">
+        <button type="button" :class="{ active: s.id === session.currentId }" @click="resume(s.id)">
+          <span class="title">{{ s.title }}</span>
+          <span class="date">{{ formatDate(s.createdAt) }}</span>
+        </button>
+      </li>
+    </ul>
+  </section>
+
+  <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+  <NextButton :disabled="!form.iAm.trim() || loading" @click="submit" />
 </template>
 
 <script setup>
 import { ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
-import { form } from '../store.js'
+import { form, session, startSession, resumeSession } from '../store.js'
+import { createSession } from '../api.js'
 
 const router = useRouter()
+
+const loading = ref(false)
+const error = ref('')
+
+async function submit() {
+  const situation = form.iAm.trim()
+  if (!situation || loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    startSession(await createSession(situation), situation)
+    router.push('/patient')
+  } catch (e) {
+    error.value = e.message || 'Could not start a session'
+  } finally {
+    loading.value = false
+  }
+}
+
+function resume(id) {
+  resumeSession(id)
+  router.push('/patient')
+}
+
+const formatDate = (ts) =>
+  new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 // Browser speech-to-text (Chrome, Edge, Safari). No backend needed for the prototype.
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -88,6 +129,53 @@ textarea {
   background: #e5484d;
   color: white;
   animation: pulse 1.2s ease-in-out infinite;
+}
+.recent h2 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recent button {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+.recent button:hover,
+.recent button.active {
+  background: var(--surface);
+}
+.recent .title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.recent .date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.error {
+  margin: 0;
+  color: #e5484d;
 }
 @keyframes pulse {
   50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.2); }
