@@ -10,17 +10,6 @@
   background: var(--bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111113;
-    --surface: #1c1d20;
-    --text: #edeef0;
-    --muted: #8b8d98;
-    --border: #363a3f;
-    --accent: #5b7cf0;
-  }
-}
-
 * {
   box-sizing: border-box;
 }
