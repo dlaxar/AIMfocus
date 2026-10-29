@@ -109,12 +109,12 @@ data/                     gitignored – IBM patient data
 
 ## Pipeline stages
 
-### Offline (once per patient, ~minutes)
+### Offline (once per patient, ~2 minutes)
 
 | Stage | What it does | Output |
 |-------|-------------|--------|
 | **S0** | HTML unescape, section detection, sentence/table/list splitting, copy detection | `documents.json`, `passages.json` |
-| **S1** | LLM (strong model) extracts atomic facts from each document; immediate code validation; coverage report | `facts.raw.json`, `s1_report.json` |
+| **S1** | LLM (strong model) extracts atomic facts from all documents in parallel (long documents in parts); immediate code validation; alias merge links concept keys across documents; coverage report | `facts.raw.json`, `s1_report.json`, `s1_aliases.json` |
 | **S2** | Concept resolution, timelines, derived facts (weight change, BMI, med changes) | `facts.json`, `concepts.json`, `derived.json` |
 | **S3** | Rule-based candidates + LLM judge; keeps only `contradiction` with confidence ≥ threshold | `contradictions.json` |
 | **S4** | Exports `fact_sheet.txt` (one line per fact) and `manifest.json` | `fact_sheet.txt`, `manifest.json` |
@@ -154,7 +154,10 @@ data/                     gitignored – IBM patient data
 | `GEMINI_API_KEY` | – | Your Google AI API key |
 | `RUNTIME_MODEL` | `gemini-3.5-flash-lite` | Runtime model (select/derive, R1/R2) |
 | `RUNTIME_THINKING_LEVEL` | `minimal` | Gemini thinking level for runtime calls (`""` = model default) |
-| `PREPROCESS_MODEL` | `gemini-3.1-pro-preview` | Model for S1/S3 |
+| `PREPROCESS_MODEL` | `gemini-4-argon` | Model for S1/S3 |
+| `PREPROCESS_MAX_PARALLEL` | `6` | Max parallel LLM calls for S2 follow-ups and S3 judges |
+| `S1_CHUNK_PASSAGES` | `30` | S1 splits longer documents into parts extracted in parallel (`0` = one call per document) |
+| `S1_PARALLEL_DOCS` | `true` | S1 extracts all documents at once; the alias merge links their concept keys (`false` = oldest first, each document reuses earlier keys) |
 | `LLM_FAKE` | `false` | `true` in CI – returns fixture responses |
 | `CONTRADICTION_LLM_SWEEP` | `false` | Extra LLM sweep for S3 |
 | `REFERENCE_DATE` | `auto` | `auto` = latest document date |

@@ -1,13 +1,15 @@
 """
-preprocess/s1_extract.py – S1: LLM fact extraction (one call per document).
+preprocess/s1_extract.py – S1: LLM fact extraction (one call per document or document part).
 
 Documents are processed in date order. For each document:
   1. Build the prompt: full document text for context, the passage list to cite, and the
      concept registry (concept keys created for earlier documents, to be reused).
-  2. Call the LLM with the s1_extract prompt + structured output schema.
+  2. Call the LLM with the s1_extract prompt + structured output schema. Long documents
+     are split into parts (S1_CHUNK_PASSAGES), cut at blank lines where possible, and the
+     parts are extracted in parallel, each with the full document text as context.
   3. Immediately validate each extracted fact (passage exists, span verbatim, numbers in
      span, enum values).
-  4. One batched retry per document for all failing facts, with their error messages.
+  4. One batched retry per call for all failing facts, with their error messages.
   5. Build a coverage report (passages with no fact and no no_content flag).
 After all documents: one alias-merge call that folds near-duplicate concept keys together.
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 from pathlib import Path
 from typing import Any, Optional
@@ -235,8 +238,13 @@ def _raw_to_fact(raw: RawFact, doc_id: str, type_counters: dict[str, int]) -> Op
     return fact
 
 
-def _build_prompt(doc: Document, passages: list[Passage], registry: dict[str, str]) -> str:
-    return (
+def _build_prompt(
+    doc: Document,
+    passages: list[Passage],
+    registry: dict[str, str],
+    part: Optional[tuple[int, int]] = None,
+) -> str:
+    prompt = (
         _load_prompt()
         .replace("{{measurement_keys}}", ", ".join(MEASUREMENT_KEYS))
         .replace("{{doc_id}}", doc.doc_id)
@@ -247,24 +255,69 @@ def _build_prompt(doc: Document, passages: list[Passage], registry: dict[str, st
         .replace("{{document_text}}", doc.text)
         .replace("{{passages}}", _build_passage_block(passages))
     )
+    if part is not None:
+        prompt = prompt.replace(
+            "## Passages (cite only these)",
+            f"## Passages (cite only these – part {part[0]} of {part[1]} of this document; "
+            "the other parts are extracted separately)",
+        )
+    return prompt
+
+
+def _chunk_passages(doc: Document, passages: list[Passage], max_passages: int) -> list[list[Passage]]:
+    """
+    Split a document's passages into parts of at most `max_passages`, extracted in parallel.
+    Cuts prefer blank lines (a double <BR> in the source: paragraph and section breaks), so
+    tables and lists stay together. A block without a blank line that is still too long is
+    split evenly at passage boundaries. Every part gets the full document text as context.
+    """
+    if max_passages <= 0 or len(passages) <= max_passages:
+        return [passages]
+
+    blocks: list[list[Passage]] = []
+    prev_end: Optional[int] = None
+    for p in sorted(passages, key=lambda p: p.start):
+        if prev_end is None or "\n\n" in doc.text[prev_end:p.start]:
+            blocks.append([])
+        blocks[-1].append(p)
+        prev_end = p.end
+
+    pieces: list[list[Passage]] = []
+    for block in blocks:
+        n = math.ceil(len(block) / max_passages)
+        size = math.ceil(len(block) / n)
+        pieces.extend(block[i:i + size] for i in range(0, len(block), size))
+
+    parts: list[list[Passage]] = []
+    current: list[Passage] = []
+    for piece in pieces:
+        if current and len(current) + len(piece) > max_passages:
+            parts.append(current)
+            current = []
+        current = current + piece
+    if current:
+        parts.append(current)
+    return parts
 
 
 # ---------------------------------------------------------------------------
 # Per-document extraction
 # ---------------------------------------------------------------------------
 
-async def _extract_document(
+async def _extract_part(
     doc: Document,
     passages: list[Passage],
     model: str,
     registry: dict[str, str],
-) -> tuple[list[Fact], S1Report]:
-    """Extract facts for one document. Adds the document's new concept keys to `registry`."""
+    part: Optional[tuple[int, int]],
+) -> tuple[list[RawFact], set[str], int]:
+    """One LLM call (+ one batched retry) for some passages of a document.
+    Returns (accepted raw facts, passage IDs flagged as no clinical content, rejected count)."""
     client = get_client()
     passage_map = {p.passage_id: p for p in passages}
     messages = [
         {"role": "system", "content": "Extract clinical facts as JSON."},
-        {"role": "user", "content": _build_prompt(doc, passages, registry)},
+        {"role": "user", "content": _build_prompt(doc, passages, registry, part)},
     ]
 
     output: LLMExtractionOutput = await client.generate(
@@ -292,7 +345,7 @@ async def _extract_document(
 
     rejected = 0
     if failing:
-        # One batched retry for all failing facts of this document
+        # One batched retry for all failing facts of this part
         listing = "\n".join(
             f"- {raw.model_dump_json()}\n  errors: {hard + soft}" for raw, hard, soft in failing
         )
@@ -337,6 +390,29 @@ async def _extract_document(
                 rejected += 1
             else:
                 accepted.append(raw)
+
+    return accepted, no_content_passage_ids, rejected
+
+
+async def _extract_document(
+    doc: Document,
+    passages: list[Passage],
+    model: str,
+    registry: dict[str, str],
+) -> tuple[list[Fact], S1Report]:
+    """Extract facts for one document. Adds the document's new concept keys to `registry`."""
+    parts = _chunk_passages(doc, passages, settings.S1_CHUNK_PASSAGES)
+    if len(parts) > 1:
+        logger.info("S1: %s in %d parts of %s passages", doc.doc_id, len(parts), [len(p) for p in parts])
+    # All parts see the registry as it was before this document; new keys are added below
+    results = await asyncio.gather(*(
+        _extract_part(doc, part, model, registry, (i + 1, len(parts)) if len(parts) > 1 else None)
+        for i, part in enumerate(parts)
+    ))
+
+    accepted = [raw for part_accepted, _, _ in results for raw in part_accepted]
+    no_content_passage_ids = set().union(*(ids for _, ids, _ in results))
+    rejected = sum(n for _, _, n in results)
 
     facts: list[Fact] = []
     type_counters: dict[str, int] = {}
@@ -393,10 +469,26 @@ def _alias_map(output: AliasOutput, registry: dict[str, str]) -> dict[str, str]:
     return mapping
 
 
-async def _merge_aliases(facts: list[Fact], registry: dict[str, str], model: str) -> list[Fact]:
+def _render_alias_registry(facts: list[Fact], registry: dict[str, str]) -> str:
+    """Alias-merge lines: '<key without C:> · <label> · <documents> · "<one span>"', so the
+    model judges from the text and not only the key's wording."""
+    docs: dict[str, set[str]] = {}
+    sample: dict[str, str] = {}
+    for f in facts:
+        if f.concept_id:
+            docs.setdefault(f.concept_id, set()).add(f.passage_id.split(":")[0])
+            sample.setdefault(f.concept_id, _ws(f.span)[:120])
+    return "\n".join(
+        f"{cid[2:]} · {label} · {', '.join(sorted(docs.get(cid, ())))} · \"{sample.get(cid, '')}\""
+        for cid, label in sorted(registry.items())
+    )
+
+
+async def _merge_aliases(facts: list[Fact], registry: dict[str, str], model: str) -> tuple[list[Fact], dict[str, str]]:
+    """Fold concept keys that name the same concept. Returns (facts, alias → canonical)."""
     if len(registry) < 2:
-        return facts
-    prompt = _load_prompt(_ALIAS_PROMPT_PATH).replace("{{registry}}", render_registry(registry))
+        return facts, {}
+    prompt = _load_prompt(_ALIAS_PROMPT_PATH).replace("{{registry}}", _render_alias_registry(facts, registry))
     output: AliasOutput = await get_client().generate(
         prompt_name="s1_alias",
         messages=[{"role": "user", "content": prompt}],
@@ -406,14 +498,14 @@ async def _merge_aliases(facts: list[Fact], registry: dict[str, str], model: str
     )
     mapping = _alias_map(output, registry)
     if not mapping:
-        return facts
+        return facts, {}
     logger.info("S1: merging %d alias concept keys", len(mapping))
     for alias in mapping:
         registry.pop(alias, None)
     return [
         f.model_copy(update={"concept_id": mapping[f.concept_id]}) if f.concept_id in mapping else f
         for f in facts
-    ]
+    ], mapping
 
 
 # ---------------------------------------------------------------------------
@@ -445,23 +537,50 @@ async def run_async(
     all_reports: list[S1Report] = []
     registry: dict[str, str] = {}  # concept_id → English label, grows document by document
 
-    # Oldest first, so later documents reuse the keys of earlier ones
-    for doc in sorted(documents, key=lambda d: (d.date or "", d.doc_id)):
-        doc_passages = passages_by_doc.get(doc.doc_id, [])
-        logger.info("S1: extracting %s (%d passages, registry %d)", doc.doc_id, len(doc_passages), len(registry))
-        facts, report = await _extract_document(doc, doc_passages, m, registry)
-        all_facts.extend(facts)
-        all_reports.append(report)
-        logger.info(
-            "  -> %d facts, %d rejected, %d uncovered passages",
-            report.facts_extracted, report.facts_rejected, len(report.uncovered_passages),
-        )
+    ordered = sorted(documents, key=lambda d: (d.date or "", d.doc_id))
+    if settings.S1_PARALLEL_DOCS:
+        # All documents at once, each with an empty registry; their keys are joined in date
+        # order and the alias merge below folds the near-duplicates together
+        logger.info("S1: extracting %d documents in parallel", len(ordered))
+        local_registries: list[dict[str, str]] = [{} for _ in ordered]
+        results = await asyncio.gather(*(
+            _extract_document(doc, passages_by_doc.get(doc.doc_id, []), m, local)
+            for doc, local in zip(ordered, local_registries)
+        ))
+        for doc, local, (facts, report) in zip(ordered, local_registries, results):
+            for key, label in local.items():
+                registry.setdefault(key, label)
+            all_facts.extend(facts)
+            all_reports.append(report)
+            logger.info(
+                "  %s -> %d facts, %d rejected, %d uncovered passages",
+                doc.doc_id, report.facts_extracted, report.facts_rejected, len(report.uncovered_passages),
+            )
+    else:
+        # Oldest first, so later documents reuse the keys of earlier ones
+        for doc in ordered:
+            doc_passages = passages_by_doc.get(doc.doc_id, [])
+            logger.info("S1: extracting %s (%d passages, registry %d)", doc.doc_id, len(doc_passages), len(registry))
+            facts, report = await _extract_document(doc, doc_passages, m, registry)
+            all_facts.extend(facts)
+            all_reports.append(report)
+            logger.info(
+                "  -> %d facts, %d rejected, %d uncovered passages",
+                report.facts_extracted, report.facts_rejected, len(report.uncovered_passages),
+            )
 
-    all_facts = await _merge_aliases(all_facts, registry, m)
+    logger.info("S1: %d concept keys before the alias merge", len(registry))
+    registry_before = dict(registry)
+    all_facts, aliases = await _merge_aliases(all_facts, registry, m)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "facts.raw.json").write_text(
         json.dumps([f.model_dump() for f in all_facts], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    # The keys before the merge and what was merged, to review or re-run the merge
+    (out_dir / "s1_aliases.json").write_text(
+        json.dumps({"registry_before": registry_before, "aliases": aliases}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     (out_dir / "s1_report.json").write_text(

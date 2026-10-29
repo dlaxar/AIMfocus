@@ -1,18 +1,18 @@
-You clean up a list of concept keys that were created one document at a time for one patient record. Some keys may name the same clinical concept in different words (e.g. `dx:hypertension` and `dx:arterial_hypertension`).
+You clean up the concept keys of one patient record. The documents were processed independently, so the same clinical concept may have received different keys in different documents.
 
 ## Task
-Return groups of keys that mean exactly the same concept. For each group give one `canonical` key (the clearest existing one) and its `aliases`.
+Return groups of keys that name the same clinical concept. For each group give one `canonical` key (the clearest existing one) and its `aliases`.
 
 ## Rules
-1. Use only keys from the list, written exactly as listed (without the label).
-2. Never group keys with different prefixes (`dx:` with `finding:`, `med:` with `allergy:` …).
-3. Never group a broader and a narrower concept (`dx:diabetes` vs `dx:diabetic_retinopathy`), different drugs, or different measurements.
-4. When unsure, do not group. Returning no groups is fine.
+1. Group keys that name the same clinical concept, whatever its type: the same diagnosis, finding, procedure, medication, measurement or event. Wording, language, abbreviations and level of detail may differ (one document may describe it more specifically than another).
+2. Keep keys apart when they name different things, even if related, e.g. a procedure and its result, a drug and its drug class, or a disease and a complication of it.
+3. Values, dates, sides (left/right) and negation are not part of a concept (they are stored on the facts), so they are never a reason to keep keys apart. Different anatomical sites are different concepts.
+4. Only group keys with the same prefix (the part before the first colon). Use only keys from the list, written exactly as listed.
+5. Return only the groups. Keys that stay alone are not listed.
 
 ## Output JSON
-```json
-{"groups": [{"canonical": "dx:arterial_hypertension", "aliases": ["dx:hypertension"]}]}
-```
+{"groups": [{"canonical": "<key>", "aliases": ["<key>", ...]}]}
 
-## Concept keys (key · label)
+## Concept keys
+One per line: key · label · documents · one text it was assigned to
 {{registry}}

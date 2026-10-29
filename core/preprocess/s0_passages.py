@@ -225,10 +225,16 @@ def _split_into_passages(text: str, doc_id: str, sections: list[tuple[int, int, 
 # Copy detection
 # ---------------------------------------------------------------------------
 
+def _tokens(text: str) -> frozenset[str]:
+    return frozenset(re.findall(r"\w+", text.lower()))
+
+
 def _token_set_ratio(a: str, b: str) -> float:
     """Fast token-set similarity (Jaccard on word sets)."""
-    ta = set(re.findall(r"\w+", a.lower()))
-    tb = set(re.findall(r"\w+", b.lower()))
+    return _jaccard(_tokens(a), _tokens(b))
+
+
+def _jaccard(ta: frozenset[str], tb: frozenset[str]) -> float:
     if not ta and not tb:
         return 1.0
     if not ta or not tb:
@@ -264,19 +270,21 @@ def detect_copies(
 
     ordered = sorted(by_doc, key=lambda d: (doc_dates.get(d) or "", d))
     updated = {p.passage_id: p for p in passages}
+    # Tokenize each eligible passage once instead of once per compared pair
+    tokens = {p.passage_id: _tokens(p.text) for p in passages if _eligible(p)}
 
     for i, later_doc in enumerate(ordered):
         earlier_docs = ordered[:i]
         for pl in by_doc[later_doc]:
-            if not _eligible(pl):
+            if pl.passage_id not in tokens:
                 continue
             best_ratio = 0.0
             best: Optional[Passage] = None
             for earlier_doc in earlier_docs:
                 for pe in by_doc[earlier_doc]:
-                    if not _eligible(pe):
+                    if pe.passage_id not in tokens:
                         continue
-                    r = _token_set_ratio(pl.text, pe.text)
+                    r = _jaccard(tokens[pl.passage_id], tokens[pe.passage_id])
                     if r > best_ratio:
                         best_ratio, best = r, pe
             if best is not None and best_ratio >= threshold:

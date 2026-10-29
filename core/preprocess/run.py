@@ -4,7 +4,7 @@ preprocess/run.py – CLI orchestrator for the offline preprocessing pipeline.
 Usage:
     python -m preprocess.run --patient 0000-0001
     python -m preprocess.run --patient 0000-0001 --from s1
-    python -m preprocess.run --patient 0000-0001 --from s3 --model gemini-3.1-pro-preview
+    python -m preprocess.run --patient 0000-0001 --from s3 --model gemini-4-argon
 """
 from __future__ import annotations
 
@@ -34,6 +34,12 @@ def _stage_index(name: str) -> int:
 
 
 def run_pipeline(patient_id: str, from_stage: str, model: str | None) -> None:
+    # One event loop for all stages: the LLM client keeps HTTP connections bound to the loop
+    # that opened them, so a new loop per stage fails with "Event loop is closed"
+    asyncio.run(_run_pipeline_async(patient_id, from_stage, model))
+
+
+async def _run_pipeline_async(patient_id: str, from_stage: str, model: str | None) -> None:
     data_dir = settings.DATA_DIR
     cache_dir = settings.CACHE_DIR
     start = _stage_index(from_stage)
@@ -46,17 +52,17 @@ def run_pipeline(patient_id: str, from_stage: str, model: str | None) -> None:
     if start <= 1:
         logger.info("=== S1: LLM fact extraction ===")
         from preprocess import s1_extract
-        asyncio.run(s1_extract.run_async(data_dir, cache_dir, patient_id, model))
+        await s1_extract.run_async(data_dir, cache_dir, patient_id, model)
 
     if start <= 2:
         logger.info("=== S2: Merge + timelines + derived ===")
         from preprocess import s2_merge
-        s2_merge.run(cache_dir, patient_id)
+        await s2_merge.run_async(cache_dir, patient_id)
 
     if start <= 3:
         logger.info("=== S3: Contradictions ===")
         from preprocess import s3_contradictions
-        asyncio.run(s3_contradictions.run_async(cache_dir, patient_id))
+        await s3_contradictions.run_async(cache_dir, patient_id)
 
     if start <= 4:
         logger.info("=== S4: Export ===")

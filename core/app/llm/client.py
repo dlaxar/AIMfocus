@@ -149,6 +149,12 @@ class GeminiClient(LLMClient):
                 config_kwargs["thinking_config"] = self._types.ThinkingConfig(
                     thinking_level=settings.RUNTIME_THINKING_LEVEL
                 )
+        else:
+            # Preprocessing runs calls in parallel: back off and retry on 429/5xx (SDK defaults:
+            # 5 attempts, exponential delay) instead of aborting the run on one rate-limited call
+            config_kwargs["http_options"] = self._types.HttpOptions(
+                retry_options=self._types.HttpRetryOptions()
+            )
 
         response = await self._client.aio.models.generate_content(
             model=model_name,
@@ -178,8 +184,8 @@ class OfflineLLMClient(LLMClient):
     <dir>/<key>.prompt.md and an empty result is returned, so a run lists every prompt
     that still needs an answer. Answers pass the same code validation as Gemini output.
 
-    Keys: s1_extract calls are keyed by document ID (stable while the concept registry
-    grows); every other call by a hash of its messages.
+    Keys: s1_extract calls are keyed by document ID and part (stable while the concept
+    registry grows); every other call by a hash of its messages.
     """
 
     def __init__(self, directory: Path) -> None:
@@ -194,9 +200,11 @@ class OfflineLLMClient(LLMClient):
         text = "\n\n".join(m.get("content", "") for m in messages)
         if prompt_name == "s1_extract":
             m = re.search(r"Document ID:\s*(\S+)", text)
+            part = re.search(r"part (\d+) of \d+ of this document", text)
             retry = any(msg.get("role") == "assistant" for msg in messages)
             if m:
-                return f"s1_extract__{m.group(1)}" + ("__retry" if retry else "")
+                return (f"s1_extract__{m.group(1)}" + (f"__part{part.group(1)}" if part else "")
+                        + ("__retry" if retry else ""))
         return f"{prompt_name}__{hashlib.sha1(text.encode('utf-8')).hexdigest()[:12]}"
 
     async def generate(

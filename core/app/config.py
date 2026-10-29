@@ -35,7 +35,17 @@ class Settings(BaseSettings):
     # Token budget instead of a level (e.g. 0 = no thinking where the model allows it);
     # -1 = unset. Takes precedence over RUNTIME_THINKING_LEVEL.
     RUNTIME_THINKING_BUDGET: int = -1
-    PREPROCESS_MODEL: str = "gemini-3.1-pro-preview"
+    PREPROCESS_MODEL: str = "gemini-4-argon"
+    # Preprocessing: max parallel LLM calls for independent work (S2 follow-ups, S3 judges)
+    PREPROCESS_MAX_PARALLEL: int = 6
+    # S1 splits documents with more passages than this into parts extracted in parallel
+    # (measured on the 133-passage letter with gemini-4-argon: 250-312 s in one call,
+    # 54 s in 7 parts, same facts). 0 = one call per document.
+    S1_CHUNK_PASSAGES: int = 30
+    # S1 extracts all documents at once instead of oldest first. No document then sees the
+    # concept keys of the others; the alias merge after S1 links them. Measured on 0000-0001:
+    # whole pipeline 1 min 38 s instead of 6 min 57 s, facts within run-to-run variation.
+    S1_PARALLEL_DOCS: bool = True
 
     LLM_FAKE: bool = False
     # Fake-mode latency per prompt, to demo async behaviour, e.g. '{"fp_derive": 3000}' (ms)

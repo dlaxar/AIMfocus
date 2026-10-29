@@ -45,7 +45,7 @@ echo "GOOGLE_API_KEY=..." > .env
 
 # 1. Core service
 cd core && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m preprocess.run --patient 0000-0001     # once, a few minutes
+.venv/bin/python -m preprocess.run --patient 0000-0001     # once, about 2 minutes
 .venv/bin/python -m uvicorn app.main:app --port 8001
 
 # 2. Flask gateway (new terminal)

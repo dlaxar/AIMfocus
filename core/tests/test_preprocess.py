@@ -127,6 +127,7 @@ def _weight_raw(doc: str, kg: int, key: str = "meas:body_weight") -> dict:
 
 class TestS1Run:
     def test_date_order_and_registry_reuse(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(s1_extract.settings, "S1_PARALLEL_DOCS", False)
         stub = ScriptedClient({"s1_extract": [
             {"facts": [_weight_raw("EARLY", 78)]},
             {"facts": [_weight_raw("LATE", 66)]},
@@ -141,7 +142,19 @@ class TestS1Run:
         assert {f.concept_id for f in facts} == {"C:meas:body_weight"}
         assert [r.facts_extracted for r in reports] == [1, 1]
 
+    def test_parallel_documents_start_with_empty_registry(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(s1_extract.settings, "S1_PARALLEL_DOCS", True)
+        stub = ScriptedClient({"s1_extract": [{"facts": [_weight_raw("EARLY", 78)]}, {"facts": [_weight_raw("LATE", 66)]}]})
+        monkeypatch.setattr(s1_extract, "get_client", lambda: stub)
+        facts, reports = asyncio.run(s1_extract.run_async(Path("unused"), _write_s0_cache(tmp_path), "P1"))
+
+        prompts = [msgs[-1]["content"] for name, msgs in stub.calls if name == "s1_extract"]
+        assert all("(empty – this is the first document)" in p for p in prompts)
+        assert [r.doc_id for r in reports] == ["EARLY", "LATE"]           # reports stay in date order
+        assert {f.concept_id for f in facts} == {"C:meas:body_weight"}
+
     def test_one_batched_retry_fixes_bad_fact(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(s1_extract.settings, "S1_PARALLEL_DOCS", False)   # scripted answers in call order
         bad = _weight_raw("EARLY", 79)          # 79 is not in the span
         stub = ScriptedClient({"s1_extract": [
             {"facts": [bad]},
@@ -154,6 +167,40 @@ class TestS1Run:
         assert len([c for c in stub.calls if c[0] == "s1_extract"]) == 3
         assert sorted(f.fields["value"] for f in facts) == [66, 78]
         assert reports[0].facts_rejected == 0
+
+    def test_chunks_cut_at_blank_lines_and_split_long_blocks(self):
+        lines = ["Diagnosen:", "A", "B", "", "Medikation:", "M1", "M2", "M3", "M4", "M5", "", "Ende"]
+        text = "\n".join(lines)
+        passages, pos = [], 0
+        for i, line in enumerate(lines):
+            if line:
+                passages.append(Passage(passage_id=f"D:p{i:03d}", doc_id="D", start=pos, end=pos + len(line), text=line))
+            pos += len(line) + 1
+        doc = Document(doc_id="D", title="T", text=text)
+        parts = s1_extract._chunk_passages(doc, passages, 4)
+        assert [[p.text for p in part] for part in parts] == [
+            ["Diagnosen:", "A", "B"],                 # whole block, cut at the blank line
+            ["Medikation:", "M1", "M2"],              # 6-passage block split evenly
+            ["M3", "M4", "M5", "Ende"],
+        ]
+        assert s1_extract._chunk_passages(doc, passages, 0) == [passages]
+
+    def test_document_parts_are_extracted_separately(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(s1_extract.settings, "S1_CHUNK_PASSAGES", 1)
+        doc = Document(doc_id="D", title="T", date="2016-04-15", text="Gewicht: 66 kg\n\nGröße: 170 cm")
+        passages = [Passage(passage_id="D:p000", doc_id="D", start=0, end=14, text="Gewicht: 66 kg"),
+                    Passage(passage_id="D:p001", doc_id="D", start=16, end=29, text="Größe: 170 cm")]
+        height = {**_weight_raw("D", 66), "passage_id": "D:p001", "span": "Größe: 170 cm",
+                  "concept_key": "meas:body_height", "fields": {"name": "Größe", "value": 170, "unit": "cm"}}
+        stub = ScriptedClient({"s1_extract": [{"facts": [_weight_raw("D", 66)]}, {"facts": [height]}]})
+        monkeypatch.setattr(s1_extract, "get_client", lambda: stub)
+        facts, report = asyncio.run(s1_extract._extract_document(doc, passages, "m", {}))
+
+        prompts = [msgs[-1]["content"] for _, msgs in stub.calls]
+        assert "part 1 of 2" in prompts[0] and "part 2 of 2" in prompts[1]
+        assert "[D:p001]" not in prompts[0] and "Größe: 170 cm" in prompts[0]   # full text as context
+        assert [f.fact_id for f in facts] == ["F:D:mea:01", "F:D:mea:02"]
+        assert report.facts_extracted == 2 and report.uncovered_passages == []
 
     def test_alias_merge_only_within_prefix(self):
         registry = {"C:dx:hypertension": "HTN", "C:dx:arterial_hypertension": "Art. HTN", "C:med:candesartan": "C"}
@@ -222,6 +269,30 @@ class TestS2:
         stub = ScriptedClient({})
         monkeypatch.setattr(s2_merge, "get_client", lambda: stub)
         assert asyncio.run(s2_merge._derive_followups(self._rec_facts(), {"A": "2015-06-28", "B": "2016-04-15"}, "m")) == []
+
+    def test_followups_run_in_parallel_and_keep_order(self, monkeypatch):
+        class SlowClient:
+            """The first call answers last; records how many calls were in flight at once."""
+            def __init__(self):
+                self.active = self.peak = self.n = 0
+
+            async def generate(self, prompt_name, messages, response_schema=None, temperature=0.0, model=None):
+                self.n += 1
+                delay = 0.05 if self.n == 1 else 0.0
+                self.active += 1
+                self.peak = max(self.peak, self.active)
+                await asyncio.sleep(delay)
+                self.active -= 1
+                return response_schema.model_validate({"status": "no_record"})
+
+        recs = [_fact(f"F:A:rec:0{i}", f"A:p00{i}", "recommendation", status="recommended", en=f"Rec {i}")
+                for i in range(1, 4)]
+        later = _fact("F:B:pro:01", "B:p003", "procedure", "C:proc:x", status="positive", en="Done")
+        stub = SlowClient()
+        monkeypatch.setattr(s2_merge, "get_client", lambda: stub)
+        derived = asyncio.run(s2_merge._derive_followups(recs + [later], {"A": "2015-06-28", "B": "2016-04-15"}, "m"))
+        assert stub.peak == 3
+        assert [d.inputs[0] for d in derived] == ["F:A:rec:01", "F:A:rec:02", "F:A:rec:03"]
 
 
 # ---------------------------------------------------------------------------

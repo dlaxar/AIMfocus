@@ -344,12 +344,15 @@ async def run_async(cache_dir: Path, patient_id: str) -> list[Contradiction]:
     candidates = generate_candidates(facts, concepts, passages, derived, doc_map)
     logger.info("S3: %d candidates to judge", len(candidates))
 
-    # Judge in sequence (avoid overwhelming the API)
-    confirmed: list[Contradiction] = []
-    for cand in candidates:
-        result = await _judge(cand, passage_map, doc_map)
-        if result:
-            confirmed.append(result)
+    # Judge in parallel (bounded); gather keeps candidate order, which the merge relies on
+    sem = asyncio.Semaphore(max(1, settings.PREPROCESS_MAX_PARALLEL))
+
+    async def one(cand: CandidateTuple) -> Optional[Contradiction]:
+        async with sem:
+            return await _judge(cand, passage_map, doc_map)
+
+    results = await asyncio.gather(*(one(c) for c in candidates))
+    confirmed = [r for r in results if r]
 
     contradictions = _merge_overlapping(confirmed)
     logger.info("S3: %d contradictions confirmed (%d before merging)", len(contradictions), len(confirmed))

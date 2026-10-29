@@ -303,7 +303,9 @@ async def _derive_followups(facts: list[Fact], doc_dates: dict[str, str], model:
     fact_map = {f.fact_id: f for f in facts}
     all_docs = sorted(doc_dates.items(), key=lambda kv: kv[1] or "")
 
-    for rec in recs:
+    sem = asyncio.Semaphore(max(1, settings.PREPROCESS_MAX_PARALLEL))
+
+    async def one(rec: Fact) -> Optional[DerivedFact]:
         rec_date = doc_dates.get(_doc_id(rec), "") or ""
         later_docs = [d for d, date in all_docs if (date or "") > rec_date]
         later = [f for f in facts if _doc_id(f) in later_docs and f.fact_id != rec.fact_id]
@@ -318,21 +320,22 @@ async def _derive_followups(facts: list[Fact], doc_dates: dict[str, str], model:
                 .replace("{{recommendation_date}}", rec_date or "unknown")
                 .replace("{{later_facts}}", "\n".join(_fact_line(f) for f in later))
             )
-            out: FollowupOutput = await client.generate(
-                prompt_name="s2_followup",
-                messages=[{"role": "user", "content": prompt}],
-                response_schema=FollowupOutput,
-                temperature=0.0,
-                model=model,
-            )
+            async with sem:
+                out: FollowupOutput = await client.generate(
+                    prompt_name="s2_followup",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_schema=FollowupOutput,
+                    temperature=0.0,
+                    model=model,
+                )
             status = out.status
             evidence = [fid for fid in out.evidence_fact_ids if fid in fact_map and fid in {f.fact_id for f in later}]
             if status == "done" and not evidence:
                 logger.warning("S2: follow-up for %s claimed done without valid evidence – skipped", rec.fact_id)
-                continue
+                return None
             if status not in ("done", "no_record"):
                 logger.warning("S2: no follow-up answer for %s – skipped", rec.fact_id)
-                continue
+                return None
 
         what = rec.en or rec.span
         if status == "done":
@@ -340,15 +343,17 @@ async def _derive_followups(facts: list[Fact], doc_dates: dict[str, str], model:
             en = f"Follow-up done: {what} → {done_by}"
         else:
             en = f"Follow-up open: {what} – no record in the {checked}"
-        derived.append(DerivedFact(
+        return DerivedFact(
             fact_id=f"D:followup:{slug(rec.fact_id)}",
             en=en,
             inputs=[rec.fact_id] + evidence,
             formula="followup_status",
             fields={"status": status, "rec_fact_id": rec.fact_id, "evidence": evidence},
             date=max(doc_dates.values()) if doc_dates else None,
-        ))
+        )
 
+    # Independent calls: run them in parallel (bounded), keep recommendation order
+    derived.extend(d for d in await asyncio.gather(*(one(rec) for rec in recs)) if d)
     return derived
 
 
@@ -356,7 +361,7 @@ async def _derive_followups(facts: list[Fact], doc_dates: dict[str, str], model:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def run(cache_dir: Path, patient_id: str) -> tuple[list[Fact], dict[str, Concept], list[DerivedFact]]:
+async def run_async(cache_dir: Path, patient_id: str) -> tuple[list[Fact], dict[str, Concept], list[DerivedFact]]:
     out_dir = cache_dir / patient_id
 
     facts = [
@@ -376,7 +381,7 @@ def run(cache_dir: Path, patient_id: str) -> tuple[list[Fact], dict[str, Concept
     derived.extend(_derive_bmi(facts))
     derived.extend(_derive_med_changes(facts, concepts))
     derived.extend(_derive_current_meds(facts, reference_date, concepts))
-    derived.extend(asyncio.run(_derive_followups(facts, doc_dates, settings.PREPROCESS_MODEL)))
+    derived.extend(await _derive_followups(facts, doc_dates, settings.PREPROCESS_MODEL))
 
     logger.info(
         "S2: %d facts, %d concepts, %d derived facts",
@@ -398,3 +403,7 @@ def run(cache_dir: Path, patient_id: str) -> tuple[list[Fact], dict[str, Concept
     )
     logger.info("S2: wrote facts.json, concepts.json, derived.json")
     return facts, concepts, derived
+
+
+def run(cache_dir: Path, patient_id: str) -> tuple[list[Fact], dict[str, Concept], list[DerivedFact]]:
+    return asyncio.run(run_async(cache_dir, patient_id))
