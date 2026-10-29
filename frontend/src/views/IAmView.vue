@@ -1,8 +1,12 @@
 <template>
-  <h1>What are you looking for?</h1>
+  <div class="logo-wrap">
+    <AIMfocusLogo />
+  </div>
+
+  <h1>What's your role,<br> and do you need?</h1>
 
   <div class="box">
-    <textarea v-model="form.iAm" placeholder="Type or tap the mic to speak…" />
+    <textarea v-model="form.iAm" placeholder="I am... and I need..." />
     <button
       class="mic"
       :class="{ listening }"
@@ -38,6 +42,7 @@
 import { ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
+import AIMfocusLogo from '../components/AIMfocusLogo.vue'
 import { form, session, startSession, resumeSession } from '../store.js'
 import { createSession } from '../api.js'
 
@@ -45,7 +50,6 @@ const router = useRouter()
 
 const loading = ref(false)
 const error = ref('')
-
 async function submit() {
   const situation = form.iAm.trim()
   if (!situation || loading.value) return
@@ -97,6 +101,13 @@ onBeforeUnmount(() => recognition?.stop())
 </script>
 
 <style scoped>
+/* ── Logo wrapper ── */
+.logo-wrap {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 32px;
+}
+
 .box {
   position: relative;
 }
