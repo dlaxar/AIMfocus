@@ -43,6 +43,14 @@ export async function getScreen(sessionId) {
   return res.json()
 }
 
+// Fetches a short 'Role, Situation' summary label for a session from the LLM.
+export async function getSessionSummary(sessionId) {
+  const res = await fetch(`${BASE_URL}/session/${encodeURIComponent(sessionId)}/summary`)
+  if (!res.ok) throw new Error(`Summary request failed (${res.status})`)
+  const data = await res.json()
+  return data.summary ?? ''
+}
+
 // Live updates while the backend searches the documents for missing items.
 // Calls onScreen(screen) for every update; returns a function that stops listening.
 export function watchScreen(sessionId, onScreen, onError) {

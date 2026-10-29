@@ -79,6 +79,13 @@ def get_session_screen(session_id):
     return jsonify(_core("GET", f"/api/v2/screens/{session_id}{wait}"))
 
 
+@app.get("/api/session/<session_id>/summary")
+def get_session_summary(session_id):
+    """Ask the LLM for a short 'Role, Situation' label for this session."""
+    data = _core("GET", f"/api/v2/screens/{session_id}/summary")
+    return jsonify(data)
+
+
 @app.get("/api/session/<session_id>/stream")
 def stream_session_screen(session_id):
     """Server-sent events from the core: one "screen" event per update, then "done"."""

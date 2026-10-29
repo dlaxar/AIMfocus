@@ -326,3 +326,27 @@ async def wait_for(screen_id: str, timeout_s: float = 60.0) -> Optional[FastScre
 
 def screen_json(screen: FastScreen) -> str:
     return json.dumps(screen.model_dump(), ensure_ascii=False)
+
+
+async def get_summary(screen: FastScreen) -> str:
+    """
+    Ask the LLM to produce a short 'Role, Situation' label for a screen.
+    Falls back to the raw situation text if the LLM call fails.
+    """
+    prompt = (
+        "You are a summariser. Given a clinical situation description, return ONLY a very short "
+        "label in the form \"<Role>, <Situation>\" (e.g. \"Anaesthetist, PreOp Info\"). "
+        "Use title case. No punctuation at the end. No explanation.\n\n"
+        f"Situation: {screen.situation}"
+    )
+    try:
+        result = await get_client().generate(
+            prompt_name="fp_summary",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            model=settings.RUNTIME_MODEL,
+        )
+        return str(result).strip()
+    except Exception:
+        logger.exception("fastpath: summary generation failed for screen %s", screen.screen_id)
+        return screen.situation
