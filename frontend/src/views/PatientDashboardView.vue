@@ -45,6 +45,17 @@
           <p v-if="v.note && v.state !== 'documented'" class="note">{{ v.note }}</p>
         </FactCard>
       </div>
+
+      <!-- ── Timings ──────────────────────────────────── -->
+      <div v-if="screen?.timings_ms" class="timings">
+        <span class="timings-label">Timings</span>
+        <dl class="timings-grid">
+          <template v-for="(val, key) in screen.timings_ms" :key="key">
+            <dt>{{ key.replace(/_/g, ' ') }}</dt>
+            <dd>{{ val.toFixed(1) }} ms</dd>
+          </template>
+        </dl>
+      </div>
     </div>
 
     <!-- ── Chat input (sticky bottom) ────────────── -->
@@ -349,4 +360,42 @@ function autoResize(e) {
 .doc { display: block; color: var(--muted); }
 q { font-style: italic; }
 .note { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
+
+/* ── Timings ────────────────────────────────────────── */
+.timings {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.timings-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.timings-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  margin: 0;
+}
+
+.timings-grid dt {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.timings-grid dd {
+  font-size: 0.82rem;
+  font-family: monospace;
+  color: var(--text);
+  margin: 0;
+}
 </style>
