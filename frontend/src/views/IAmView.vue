@@ -6,7 +6,7 @@
   <h1>What's your role, and what do you need?</h1>
 
   <div class="box">
-    <textarea v-model="form.iAm" placeholder="I am..." />
+    <textarea v-model="form.iAm" placeholder="I am... and I want..." />
     <button
       class="mic"
       :class="{ listening }"
