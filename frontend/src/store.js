@@ -4,6 +4,7 @@ import { reactive, watch } from 'vue'
 export const form = reactive({
   iAm: '',
   patient: '',
+  patientData: null, // full { id, name, dob, ward } object
 })
 
 const CURRENT_KEY = 'currentSessionId'

@@ -7,11 +7,23 @@
           <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <h1 class="patient-name">{{ patient?.name ?? 'Anna Musterfrau' }}</h1>
+      <img src="../assets/logo.png" alt="Logo" class="header-logo" />
     </header>
 
     <!-- ── Fact cards (scrollable body) ──────────── -->
     <div class="facts-scroll">
+      <!-- Patient info banner -->
+      <div v-if="patient" class="patient-info">
+        <h1 class="patient-name">{{ patient.name }}</h1>
+        <div class="patient-meta">
+          <span v-if="patient.dob">{{ patient.dob }}</span>
+          <span v-if="patient.ward" class="meta-sep">·</span>
+          <span v-if="patient.ward">{{ patient.ward }}</span>
+          <span v-if="patient.id" class="meta-sep">·</span>
+          <span v-if="patient.id" class="patient-id">{{ patient.id }}</span>
+        </div>
+      </div>
+
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-else-if="!screen" class="empty-state muted">Loading…</p>
 
@@ -63,13 +75,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import FactCard from '../components/FactCard.vue'
 import { getScreen, watchScreen } from '../api.js'
-import { session } from '../store.js'
+import { session, form } from '../store.js'
 
 const router = useRouter()
+const patient = computed(() => form.patientData)
 
 // ── Screen / facts ────────────────────────────────────────────────────────────
 const screen = ref(null)
@@ -161,23 +174,6 @@ function autoResize(e) {
   z-index: 10;
 }
 
-/* Fade band below the header — cards dissolve out of the background */
-.patient-header::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 56px;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    var(--bg) 0%,
-    transparent 100%
-  );
-  z-index: 9;
-}
-
 .back-btn {
   flex-shrink: 0;
   display: grid;
@@ -196,13 +192,38 @@ function autoResize(e) {
   color: var(--text);
 }
 
+.header-logo {
+  height: 32px;
+  width: auto;
+}
+
+/* ── Patient info banner ──────────────────────────── */
+.patient-info {
+  margin-bottom: 20px;
+}
+
 .patient-name {
-  margin: 0;
-  font-size: 1.5rem;
+  margin: 0 0 4px;
+  font-size: 1.6rem;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.patient-meta {
+  font-size: 0.875rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.meta-sep {
+  color: var(--border);
+}
+
+.patient-id {
+  font-family: monospace;
+  font-size: 0.82rem;
 }
 
 /* ── Scrollable facts area ──────────────────────────── */

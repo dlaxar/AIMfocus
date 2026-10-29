@@ -47,6 +47,7 @@ const selectedPatient = ref(null)
 
 watch(selectedPatient, (p) => {
   form.patient = p ? p.id : ''
+  form.patientData = p ?? null
 })
 
 function next() {
