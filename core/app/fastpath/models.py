@@ -70,10 +70,13 @@ class FastScreen(BaseModel):
     role: str = ""
     task: str = ""
     reference_date: Optional[str] = None
-    status: Literal["partial", "complete"] = "partial"
+    # starting: ID handed out, select call running · partial: documented items there,
+    # text search running · complete: everything resolved (or `error` says why not)
+    status: Literal["starting", "partial", "complete"] = "starting"
     variables: list[ScreenVariable] = Field(default_factory=list)
     contradictions: list[Contradiction] = Field(default_factory=list)
     timings_ms: dict[str, float] = Field(default_factory=dict)
+    error: Optional[str] = None                 # set when the select call failed
     version: int = 0                            # bumped on every update (for SSE / polling)
 
 

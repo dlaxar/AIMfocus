@@ -5,7 +5,7 @@ app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
   GET  /api/v2/concepts[?type=]           concepts, optionally filtered by fact type
   GET  /api/v2/concepts/{concept_id}      one concept with its facts and sources
   GET  /api/v2/facts/{fact_id}            one fact (or derived fact) with its source
-  POST /api/v2/screens                    {"situation": ...} → 202, documented part at once
+  POST /api/v2/screens                    {"situation": ...} → 202 with the screen ID at once
   GET  /api/v2/screens?situation=...      same, for quick tests from a browser / curl
   GET  /api/v2/screens/{id}[?wait=true]   current state; wait=true blocks until complete
   GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update, then "done"

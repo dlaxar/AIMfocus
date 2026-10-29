@@ -60,15 +60,18 @@ Tests (no API key needed): `cd core && LLM_FAKE=true .venv/bin/python -m pytest 
 
 ## Results on the 5 situations (2026-10-29)
 
-Fast path via `python -m eval.run_eval --v2`, runtime `gemini-3.8-flash` (thinking low), answers checked by hand against `cases/expected.json`.
+Fast path via `python -m eval.run_eval --v2`, answers checked by hand against `cases/expected.json`.
+`GET /api/session/get` returns the session ID at once; the times below run from that call until the screen is complete.
 
-| Metric | Result | Target |
-|---|---|---|
-| Correct answers | 15 of 15 (manual check) | 15 of 15 |
-| Traceability | 100% (116/116 sources point to the quoted passage) | 100% |
-| Invented facts | 0 validator drops | 0 |
-| Contradictions | not implemented yet (in progress) | 5 or more |
-| Load time | 9.9–12.7 s until the screen is complete | under 10 s |
+| Metric | gemini-3.5-flash-lite, thinking minimal (default) | gemini-3.8-flash, thinking low | Target |
+|---|---|---|---|
+| Correct answers | 13–14 of 15 (3 runs) | 15 of 15 | 15 of 15 |
+| Traceability | 100% of linked sources | 100% (116/116) | 100% |
+| Invented facts | 0 validator drops | 0 validator drops | 0 |
+| Contradictions | not implemented yet (in progress) | – | 5 or more |
+| Load time, complete screen | 1.2–4.9 s | 9.9–14.3 s | under 10 s |
+
+With flash-lite the missing answer changes between runs (e.g. the native head CT for 4.2, the stenosis side for 5.3). For the highest answer quality set `RUNTIME_MODEL=gemini-3.8-flash` and `RUNTIME_THINKING_LEVEL=low` in `.env`.
 
 The fact store was extracted offline (`preprocess.run --offline-llm`) with Claude using the same S1 prompt and validation as the Gemini path; the app itself only uses Gemini at runtime.
 

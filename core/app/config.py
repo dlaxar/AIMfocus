@@ -27,9 +27,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(default="", validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
 
     # Measured 2026-10-29 on the select prompt (~29k chars): 3.8-flash default 15.7 s,
-    # 3.8-flash thinking=low 9.0 s, 3.5-flash thinking=minimal 5.1 s (3.8 does not support "minimal")
-    RUNTIME_MODEL: str = "gemini-3.8-flash"
-    RUNTIME_THINKING_LEVEL: str = "low"         # applied to RUNTIME_MODEL calls; "" = model default
+    # 3.8-flash thinking=low 9.0 s, 3.5-flash thinking=minimal 5.1 s (3.8 does not support "minimal").
+    # Full runs on the 5 situations: 3.5-flash-lite (minimal) 1.2-4.9 s per complete screen,
+    # 13-14 of 15 answers over 3 runs; 3.8-flash (low) 15/15 but 9.9-14.3 s.
+    RUNTIME_MODEL: str = "gemini-3.5-flash-lite"
+    RUNTIME_THINKING_LEVEL: str = "minimal"     # applied to RUNTIME_MODEL calls; "" = model default
     PREPROCESS_MODEL: str = "gemini-3.1-pro-preview"
 
     LLM_FAKE: bool = False

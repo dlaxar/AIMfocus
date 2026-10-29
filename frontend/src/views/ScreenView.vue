@@ -6,7 +6,8 @@
   </header>
 
   <p v-if="error" class="error" role="alert">{{ error }}</p>
-  <p v-else-if="!screen" class="muted">Loading…</p>
+  <p v-else-if="!screen || screen.status === 'starting'" class="muted">Reading the record…</p>
+  <p v-if="screen?.error" class="error" role="alert">{{ screen.error }}</p>
 
   <ul v-if="screen" class="vars">
     <li v-for="v in screen.variables" :key="v.name" :class="['var', v.state]">

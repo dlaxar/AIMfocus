@@ -120,11 +120,12 @@ def fetch_v2_screen(base_url: str, situation: str) -> tuple[dict, int, int]:
     t0 = time.perf_counter()
     resp = httpx.post(f"{base_url}/api/v2/screens", json={"situation": situation}, timeout=60)
     resp.raise_for_status()
-    first_ms = round((time.perf_counter() - t0) * 1000)
     screen = resp.json()
     if screen["status"] != "complete":
-        screen = httpx.get(f"{base_url}/api/v2/screens/{screen['screen_id']}", params={"wait": "true"}, timeout=60).json()
+        screen = httpx.get(f"{base_url}/api/v2/screens/{screen['screen_id']}", params={"wait": "true"}, timeout=90).json()
     complete_ms = round((time.perf_counter() - t0) * 1000)
+    # The ID returns at once; "first response" is when the documented items were ready
+    first_ms = round(screen.get("timings_ms", {}).get("first_response", complete_ms))
     sections = [
         {"label": v["label"], "items": [{"kind": v["state"], "text_en": v["value"], "sources": v["sources"]}]}
         for v in screen["variables"]

@@ -1,11 +1,12 @@
 """
 app/fastpath/service.py – fast-path screen builder.
 
-create_screen():
+create_screen() registers the screen and returns its ID at once (status "starting"); the rest
+runs in the background and fills the stored screen in place:
   1. One select call (fact-store structure + fact sheet → variables with values + fact IDs).
-  2. Validate each documented variable with the R3 validator; build sources.
-  3. Return the screen at once. Variables without facts are "pending".
-  4. In the background, one derive call per pending variable over the raw passages,
+  2. Validate each documented variable with the R3 validator; build sources (status "partial").
+     Variables without facts are "pending".
+  3. One derive call per pending variable over the raw passages,
      all in parallel (bounded by FASTPATH_MAX_PARALLEL_DERIVE). Each result is validated
      (passage IDs exist, quotes verbatim, numbers backed by quotes) and written into the
      stored screen; the screen becomes "complete" when all are done.
@@ -124,6 +125,9 @@ def _documented_variable(v: SelectedVariable, store: FactStore, t0: float) -> Op
     """Validate a documented variable. None → treat it as missing and derive it."""
     item = AnswererItem(need_id=v.name, fact_ids=v.fact_ids, text_en=v.value, absent=False)
     result = validate_item(item, store.get_any_fact, [])
+    if not v.value.strip():
+        # A small model sometimes cites facts but writes no value: treat as not passed
+        result.fail("empty value")
     if result.passed:
         return ScreenVariable(
             name=v.name, label=v.label, state="documented", value=v.value,
@@ -247,35 +251,52 @@ def _relevant_contradictions(screen: FastScreen, store: FactStore):
 # ---------------------------------------------------------------------------
 
 async def create_screen(situation: str, store: FactStore) -> FastScreen:
+    """
+    Register a screen and return it at once (status "starting", no variables yet), so the
+    caller gets its ID without waiting for an LLM call. Select and derive run in the
+    background; the screen object is filled in place.
+    """
     t0 = time.perf_counter()
     reference_date = store.reference_date() or ""
-    selected = await _select(situation, store, reference_date)
-
     screen = FastScreen(
         screen_id=uuid.uuid4().hex[:12],
         situation=situation,
-        role=selected.role,
-        task=selected.task,
         reference_date=reference_date or None,
-        timings_ms={"select": _elapsed_ms(t0)},
     )
+    _screens[screen.screen_id] = screen
+    _tasks[screen.screen_id] = asyncio.create_task(_build(screen, store, t0))
+    return screen
 
+
+async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
+    try:
+        selected = await _select(screen.situation, store, screen.reference_date or "")
+    except Exception as exc:  # the ID is already out: report the failure on the screen
+        logger.exception("fastpath: select failed for screen %s", screen.screen_id)
+        screen.error = f"Could not prepare the screen: {type(exc).__name__}"
+        screen.status = "complete"
+        screen.timings_ms["complete"] = _elapsed_ms(t0)
+        screen.version += 1
+        return
+
+    screen.role, screen.task = selected.role, selected.task
+    screen.timings_ms["select"] = _elapsed_ms(t0)
     for v in sorted(selected.variables, key=lambda v: v.priority):
         documented = _documented_variable(v, store, t0) if v.documented and v.fact_ids else None
         screen.variables.append(documented or ScreenVariable(
             name=v.name, label=v.label, state="pending", priority=v.priority,
         ))
-
     screen.contradictions = _relevant_contradictions(screen, store)
     screen.timings_ms["first_response"] = _elapsed_ms(t0)
-    _screens[screen.screen_id] = screen
 
     if any(v.state == "pending" for v in screen.variables):
-        _tasks[screen.screen_id] = asyncio.create_task(_derive_all(screen, store, t0))
+        screen.status = "partial"
+        screen.version += 1
+        await _derive_all(screen, store, t0)
     else:
         screen.status = "complete"
         screen.timings_ms["complete"] = screen.timings_ms["first_response"]
-    return screen
+        screen.version += 1
 
 
 def get_screen(screen_id: str) -> Optional[FastScreen]:
