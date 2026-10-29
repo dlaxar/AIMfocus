@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # 13-14 of 15 answers over 3 runs; 3.8-flash (low) 15/15 but 9.9-14.3 s.
     RUNTIME_MODEL: str = "gemini-3.5-flash-lite"
     RUNTIME_THINKING_LEVEL: str = "minimal"     # applied to RUNTIME_MODEL calls; "" = model default
+    # Token budget instead of a level (e.g. 0 = no thinking where the model allows it);
+    # -1 = unset. Takes precedence over RUNTIME_THINKING_LEVEL.
+    RUNTIME_THINKING_BUDGET: int = -1
     PREPROCESS_MODEL: str = "gemini-3.1-pro-preview"
 
     LLM_FAKE: bool = False
