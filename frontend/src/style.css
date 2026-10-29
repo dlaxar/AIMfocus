@@ -21,7 +21,7 @@ body {
 
 /* Phone-sized column, centred on larger screens */
 .screen {
-  max-width: 420px;
+  max-width: 650px;
   min-height: 100dvh;
   margin: 0 auto;
   padding: 48px 24px 100px;
