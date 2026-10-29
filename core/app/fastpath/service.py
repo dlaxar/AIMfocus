@@ -377,6 +377,14 @@ def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
     screen.contradictions = _relevant_contradictions(screen, store)
     shown = {cx.contradiction_id for cx in screen.contradictions}
     screen.other_contradictions = [cx for cx in store.contradictions if cx.contradiction_id not in shown]
+    # Per value: which contradictions touch it (through its facts, or the passages a text
+    # search cited) and which of its facts are part of one, so the UI can flag them
+    for v in screen.variables:
+        passages = {s.passage_id for s in v.sources}
+        touching = [cx for cx in store.contradictions if set(cx.fact_ids) & set(v.fact_ids) or set(cx.passage_ids) & passages]
+        v.contradiction_ids = [cx.contradiction_id for cx in touching]
+        in_cx = {fid for cx in touching for fid in cx.fact_ids}
+        v.contradicting_fact_ids = [fid for fid in v.fact_ids if fid in in_cx]
 
 
 def _relevant_contradictions(screen: FastScreen, store: FactStore):

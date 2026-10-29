@@ -85,6 +85,8 @@ class ScreenVariable(BaseModel):
     note: Optional[str] = None
     priority: int = 3
     resolved_ms: Optional[float] = None         # time from request to this value
+    contradiction_ids: list[str] = Field(default_factory=list)       # contradictions touching this value
+    contradicting_fact_ids: list[str] = Field(default_factory=list)  # its facts that are part of one
 
 
 class FastScreen(BaseModel):

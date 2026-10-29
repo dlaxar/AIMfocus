@@ -104,6 +104,8 @@ class FactStore:
         if contradictions_path.exists():
             raw_cx = json.loads(contradictions_path.read_text(encoding="utf-8"))
             self.contradictions = [Contradiction.model_validate(x) for x in raw_cx]
+            for cx in self.contradictions:
+                cx.fact_ids = self._facts_in_passages(set(cx.passage_ids))
 
         # Fact sheet (for the answerer prompt)
         fact_sheet_path = out_dir / "fact_sheet.txt"
@@ -149,6 +151,15 @@ class FactStore:
 
     def contradictions_for_concepts(self, concept_ids: set[str]) -> list[Contradiction]:
         return [cx for cx in self.contradictions if set(cx.concept_ids) & concept_ids]
+
+    def _facts_in_passages(self, passage_ids: set[str]) -> list[str]:
+        """Facts extracted from these passages or copies of them, plus derived facts built on them."""
+        def linked(pid: str) -> bool:
+            p = self.passages.get(pid)
+            return pid in passage_ids or bool(p and p.copy_of in passage_ids)
+        facts = [fid for fid, f in self.facts.items() if linked(f.passage_id)]
+        hit = set(facts)
+        return facts + [did for did, d in self.derived.items() if hit & set(d.inputs)]
 
     def _age_fact(self) -> Optional[DerivedFact]:
         """Age on the reference date, from the date of birth in a letter header ("geb. 15.03.1959")."""

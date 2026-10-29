@@ -88,6 +88,29 @@ class TestScreens:
         assert cat.resolve(handle) == "C:allergy:contrast_media"
         assert cat.resolve("F:TEST001:all:01") == "F:TEST001:all:01"   # a full ID passes through
 
+    def test_screen_values_name_their_contradicting_facts(self, client):
+        from app.fastpath.models import FastScreen, ScreenVariable
+        from app.fastpath.service import _attach_contradictions
+        from app.schemas import Contradiction
+        from app.store import get_store
+
+        store = get_store()
+        fact = store.get_fact("F:TEST001:all:01")
+        cx = Contradiction(contradiction_id="X:test", summary_en="t", kind="value", passage_ids=[fact.passage_id])
+        cx.fact_ids = store._facts_in_passages(set(cx.passage_ids))
+        saved, store.contradictions = store.contradictions, [cx]
+        try:
+            screen = FastScreen(screen_id="s", situation="x", variables=[
+                ScreenVariable(name="a", label="Allergies", state="documented", fact_ids=["F:TEST001:all:01"]),
+                ScreenVariable(name="b", label="Other", state="documented"),
+            ])
+            _attach_contradictions(screen, store)
+        finally:
+            store.contradictions = saved
+        a, b = screen.variables
+        assert a.contradiction_ids == ["X:test"] and a.contradicting_fact_ids == ["F:TEST001:all:01"]
+        assert b.contradiction_ids == [] and b.contradicting_fact_ids == []
+
     def test_unknown_ids_only_means_not_in_store(self, client):
         from app.fastpath.models import SelectedVariable
         from app.fastpath.service import _documented_variable

@@ -1,0 +1,55 @@
+"""
+app/chat/models.py – LLM output schema and API models for questions about the patient.
+"""
+from __future__ import annotations
+
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
+
+from app.schemas import Source
+
+
+class ChatAnswer(BaseModel):
+    """What the chat call returns. Citations are checked in code before anyone sees the answer."""
+    answer: str = ""
+    found: bool = False
+    facts: list[str] = Field(default_factory=list)     # fact handles (f40, d3)
+    passages: list[str] = Field(default_factory=list)  # passage IDs, for what the facts do not cover
+    quotes: list[str] = Field(default_factory=list)    # verbatim German quotes from those passages
+
+
+AnswerState = Literal[
+    "answered",         # backed by the cited facts / passages
+    "not_documented",   # the documents do not answer it
+    "check",            # an answer exists but failed validation – show with a warning
+]
+
+
+class ChatRequest(BaseModel):
+    question: str
+    chat_id: Optional[str] = None     # continue a conversation (follow-up questions)
+    screen_id: Optional[str] = None   # the clinician's screen, so follow-ups can refer to it
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    state: Optional[AnswerState] = None
+    sources: list[Source] = Field(default_factory=list)
+
+
+class ChatReply(BaseModel):
+    chat_id: str
+    answer: str
+    state: AnswerState
+    sources: list[Source] = Field(default_factory=list)
+    fact_ids: list[str] = Field(default_factory=list)
+    note: Optional[str] = None        # why an answer is "check"
+    timings_ms: dict[str, float] = Field(default_factory=dict)
+
+
+class Chat(BaseModel):
+    chat_id: str
+    screen_id: Optional[str] = None
+    messages: list[ChatMessage] = Field(default_factory=list)

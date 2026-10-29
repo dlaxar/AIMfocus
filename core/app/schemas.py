@@ -143,6 +143,9 @@ class Contradiction(BaseModel):
     passage_ids: list[str] = Field(default_factory=list)
     concept_ids: list[str] = Field(default_factory=list)
     judge: Optional[ContradictionJudge] = None
+    # Facts extracted from the linked passages, and derived facts built on them. Filled by
+    # FactStore at load time (not stored in contradictions.json).
+    fact_ids: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
