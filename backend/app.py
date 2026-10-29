@@ -64,6 +64,7 @@ def get_session():
         abort(400, "'situation' must be base64-encoded UTF-8")
 
     app.logger.info("New session for situation: %s", situation)
+
     # The core service answers from its fact store at once and keeps searching the raw
     # text for missing items in the background, so the screen fills while the user
     # picks the patient. The session ID is the core screen ID.
