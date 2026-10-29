@@ -6,7 +6,7 @@
   <h1>What's your role, and what do you need?</h1>
 
   <div class="box">
-    <textarea v-model="form.iAm" placeholder="I am... and I need..." />
+    <textarea v-model="form.iAm" placeholder="I am..." />
     <button
       class="mic"
       :class="{ listening }"
@@ -21,7 +21,7 @@
     </button>
   </div>
 
-  <p class="tip"><strong>Try:</strong> "I am an anaesthetist and need a pre-op assessment for a patient having breast surgery"</p>
+  <p class="tip" style="padding-bottom: 20px" @click="form.iAm = 'I am an anaesthetist and need a pre-op assessment for a patient having breast surgery'"><strong>Try:</strong> "I am an anaesthetist and need a pre-op assessment for a patient having breast surgery"</p>
 
   <section v-if="session.recent.length" class="recent">
     <h2>Recent</h2>
@@ -193,6 +193,10 @@ textarea {
   font-size: 0.85rem;
   color: var(--muted);
   line-height: 1.5;
+  cursor: pointer;
+}
+.tip:hover {
+  color: var(--text);
 }
 .error {
   margin: 0;
