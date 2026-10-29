@@ -469,17 +469,28 @@ def screen_json(screen: FastScreen) -> str:
     return json.dumps(screen.model_dump(), ensure_ascii=False)
 
 
-async def get_summary(screen: FastScreen) -> str:
+async def get_summary(screen: FastScreen) -> dict:
     """
-    Ask the LLM to produce a short 'Role, Situation' label for a screen.
-    Falls back to the raw situation text if the LLM call fails.
+    Ask the LLM to produce a short 'Role, Situation' label and a matching icon URL.
+    Falls back to the raw situation text and a generic icon if the LLM call fails.
+
+    The icon_url points to a publicly available Lucide SVG via unpkg, e.g.:
+      https://unpkg.com/lucide-static@latest/icons/stethoscope.svg
     """
     prompt = (
-        "You are a summariser. Given a clinical situation description, return ONLY a very short "
-        "label in the form \"<Role>, <Situation>\" (e.g. \"Anaesthetist, PreOp Info\"). "
-        "Use title case. No punctuation at the end. No explanation.\n\n"
+        "You are a summariser. Given a clinical situation description, return a JSON object "
+        "with exactly two keys:\n"
+        "  \"summary\": a very short label in the form \"<Role>, <Situation>\" "
+        "(e.g. \"Anaesthetist, PreOp Info\"). Use title case. No punctuation at the end.\n"
+        "  \"icon\": the name of the single most fitting Lucide icon for the clinical role "
+        "(kebab-case filename without extension, e.g. \"stethoscope\", \"heart-pulse\", "
+        "\"scissors\", \"eye\", \"bone\", \"brain\", \"activity\", \"user\", \"baby\", "
+        "\"syringe\", \"scan\", \"flask-conical\", \"microscope\", \"thermometer\"). "
+        "Pick the icon that best matches the clinician's specialty or task. "
+        "Return only the JSON object, no explanation.\n\n"
         f"Situation: {screen.situation}"
     )
+    fallback = {"summary": screen.situation, "icon_url": "https://unpkg.com/lucide-static@latest/icons/user.svg"}
     try:
         result = await get_client().generate(
             prompt_name="fp_summary",
@@ -487,7 +498,20 @@ async def get_summary(screen: FastScreen) -> str:
             temperature=0.0,
             model=settings.RUNTIME_MODEL,
         )
-        return str(result).strip()
+        text = str(result).strip()
+        # Strip markdown code fences if the model wrapped the JSON
+        if text.startswith("```"):
+            text = re.sub(r"^```[^\n]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text.strip())
+        data = json.loads(text)
+        summary = str(data.get("summary", "")).strip() or screen.situation
+        icon_name = str(data.get("icon", "user")).strip().lower()
+        # Allow only safe kebab-case names to build the URL
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", icon_name):
+            icon_url = f"https://unpkg.com/lucide-static@latest/icons/{icon_name}.svg"
+        else:
+            icon_url = "https://unpkg.com/lucide-static@latest/icons/user.svg"
+        return {"summary": summary, "icon_url": icon_url}
     except Exception:
         logger.exception("fastpath: summary generation failed for screen %s", screen.screen_id)
-        return screen.situation
+        return fallback

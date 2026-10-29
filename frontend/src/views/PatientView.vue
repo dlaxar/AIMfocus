@@ -1,10 +1,18 @@
 <template>
   <div class="situation-card">
     <div class="situation-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-      </svg>
+      <Transition name="icon-swap" mode="out-in">
+        <span
+          v-if="iconUrl"
+          :key="iconUrl"
+          class="role-icon"
+          :style="{ WebkitMaskImage: `url(${iconUrl})`, maskImage: `url(${iconUrl})` }"
+        />
+        <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+        </svg>
+      </Transition>
     </div>
 
     <div class="situation-body">
@@ -52,14 +60,19 @@ const displayText = computed(() => {
   return entry?.summary ?? form.iAm
 })
 
+const iconUrl = computed(() => {
+  const entry = session.recent.find((s) => s.id === session.currentId)
+  return entry?.icon_url ?? null
+})
+
 onMounted(async () => {
   const id = session.currentId
   if (!id) return
   const entry = session.recent.find((s) => s.id === id)
   if (entry?.summary) return
   try {
-    const summary = await getSessionSummary(id)
-    if (summary) setSessionSummary(id, summary)
+    const { summary, icon_url } = await getSessionSummary(id)
+    if (summary) setSessionSummary(id, summary, icon_url)
   } catch {
     // Summary unavailable – keep showing the raw prompt
   }
@@ -77,6 +90,7 @@ onMounted(async () => {
   padding: 14px 16px;
   /* Stretch to full width of the .screen content area */
   width: 100%;
+  margin-bottom: 20px;
 }
 
 .situation-icon {
@@ -115,6 +129,36 @@ onMounted(async () => {
 }
 .edit-link:hover {
   text-decoration: underline;
+}
+
+.role-icon {
+  width: 22px;
+  height: 22px;
+  /* Use the SVG as a mask so background-color drives the colour,
+     picking up --accent automatically regardless of its value. */
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  background-color: var(--accent);
+  /* src is set via inline style on the element */
+}
+
+/* ── Icon swap transition ── */
+.icon-swap-enter-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.icon-swap-leave-active {
+  transition: opacity 0.15s ease;
+}
+.icon-swap-enter-from {
+  opacity: 0;
+  transform: scale(0.7);
+}
+.icon-swap-leave-to {
+  opacity: 0;
 }
 
 /* ── Summary swap transition ── */

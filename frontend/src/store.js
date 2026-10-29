@@ -40,14 +40,17 @@ export function startSession(id, situation) {
   const title = situation.trim().replace(/\s+/g, ' ')
   session.currentId = id
   session.recent = [
-    { id, title: title.length > 60 ? title.slice(0, 57) + '…' : title, situation, summary: null, createdAt: Date.now() },
+    { id, title: title.length > 60 ? title.slice(0, 57) + '…' : title, situation, summary: null, icon_url: null, createdAt: Date.now() },
     ...session.recent.filter((s) => s.id !== id),
   ].slice(0, MAX_RECENT)
 }
 
-export function setSessionSummary(id, summary) {
+export function setSessionSummary(id, summary, icon_url) {
   const entry = session.recent.find((s) => s.id === id)
-  if (entry) entry.summary = summary
+  if (entry) {
+    entry.summary = summary
+    if (icon_url) entry.icon_url = icon_url
+  }
 }
 
 export function resumeSession(id) {

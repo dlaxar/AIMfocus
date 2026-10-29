@@ -122,8 +122,7 @@ async def get_screen_summary(screen_id: str) -> dict[str, str]:
     screen = service.get_screen(screen_id)
     if screen is None:
         raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
-    summary = await service.get_summary(screen)
-    return {"summary": summary}
+    return await service.get_summary(screen)
 
 
 @router.get("/screens/{screen_id}/stream")
