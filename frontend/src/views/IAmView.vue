@@ -3,7 +3,7 @@
     <AIMfocusLogo />
   </div>
 
-  <h1>What's your role,<br> and do you need?</h1>
+  <h1>What's your role, and what do you need?</h1>
 
   <div class="box">
     <textarea v-model="form.iAm" placeholder="I am... and I need..." />
@@ -20,6 +20,8 @@
       </svg>
     </button>
   </div>
+
+  <p class="tip"><strong>Try:</strong> "I am an anaesthetist and need a pre-op assessment for a patient having breast surgery"</p>
 
   <section v-if="session.recent.length" class="recent">
     <h2>Recent</h2>
@@ -185,6 +187,12 @@ textarea {
 .recent .date {
   font-size: 0.8rem;
   color: var(--muted);
+}
+.tip {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
 }
 .error {
   margin: 0;
