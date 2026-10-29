@@ -12,19 +12,27 @@
 
     <!-- ── Fact cards (scrollable body) ──────────── -->
     <div class="facts-scroll">
-      <div class="facts-grid">
-        <FactCard
-          v-for="fact in facts"
-          :key="fact.key"
-          :label="fact.label"
-          :value="fact.value"
-        />
-      </div>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <p v-else-if="!screen" class="empty-state muted">Loading…</p>
 
-      <!-- Drop an empty state while there are no facts yet -->
-      <p v-if="facts.length === 0" class="empty-state">
-        No information loaded yet.
-      </p>
+      <div v-else class="facts-grid">
+        <FactCard
+          v-for="v in screen.variables"
+          :key="v.name"
+          :label="v.label"
+          :value="v.state === 'pending' ? null : v.value"
+          :class="['fact-card-wrap', v.state]"
+        >
+          <span class="badge">{{ stateLabel[v.state] ?? v.state }}</span>
+          <ul v-if="v.sources && v.sources.length" class="sources">
+            <li v-for="s in v.sources" :key="s.passage_id">
+              <span class="doc">{{ s.doc_title }}, {{ s.doc_date }}</span>
+              <q>{{ s.quote_de }}</q>
+            </li>
+          </ul>
+          <p v-if="v.note && v.state !== 'documented'" class="note">{{ v.note }}</p>
+        </FactCard>
+      </div>
     </div>
 
     <!-- ── Chat input (sticky bottom) ────────────── -->
@@ -55,29 +63,43 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import FactCard from '../components/FactCard.vue'
-import { form } from '../store.js'
+import { getScreen, watchScreen } from '../api.js'
+import { session } from '../store.js'
 
 const router = useRouter()
 
-// ── Patient data ──────────────────────────────────────────────────────────────
-// The patient object is passed as a route state (set in PatientView when navigating here).
-// Falls back to whatever is in the store if navigation state is absent.
-const patient = ref(history.state?.patient ?? null)
+// ── Screen / facts ────────────────────────────────────────────────────────────
+const screen = ref(null)
+const error  = ref('')
+let stop = null
 
-// ── Fact cards ────────────────────────────────────────────────────────────────
-// Each entry: { key: string, label: string, value: string | null }
-// Add, remove or reorder entries here to customise the displayed facts.
-const facts = ref([
-  { key: 'dob',        label: 'Date of birth', value: patient.value?.dob   ?? null },
-  { key: 'ward',       label: 'Ward',           value: patient.value?.ward  ?? null },
-  { key: 'id',         label: 'Patient ID',     value: patient.value?.id    ?? null },
-  { key: 'diagnosis',  label: 'Diagnosis',      value: null },
-  { key: 'allergies',  label: 'Allergies',      value: null },
-  { key: 'medication', label: 'Medication',     value: null },
-])
+const stateLabel = {
+  documented:     'documented',
+  derived:        'from text',
+  pending:        'searching',
+  not_documented: 'not documented',
+  check:          'check',
+}
+
+onMounted(async () => {
+  if (!session.currentId) {
+    error.value = 'No active session – start on the first screen.'
+    return
+  }
+  try {
+    screen.value = await getScreen(session.currentId)
+    if (screen.value.status !== 'complete') {
+      stop = watchScreen(session.currentId, (s) => (screen.value = s))
+    }
+  } catch (e) {
+    error.value = e.message || 'Could not load the screen'
+  }
+})
+
+onBeforeUnmount(() => stop?.())
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 const chatMessage = ref('')
@@ -279,4 +301,31 @@ function autoResize(e) {
 .send-btn:not(:disabled):hover {
   opacity: 0.85;
 }
+
+/* ── Screen variable extras ─────────────────────────── */
+.error { color: #ce2c31; padding: 0 24px; }
+.muted { color: var(--muted); }
+
+.badge {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+:deep(.fact-card-wrap.pending) .badge { color: var(--accent); }
+:deep(.fact-card-wrap.not_documented) { border-style: dashed; }
+:deep(.fact-card-wrap.check) { border-color: #f5a623; }
+
+.sources {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.doc { display: block; color: var(--muted); }
+q { font-style: italic; }
+.note { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
 </style>
