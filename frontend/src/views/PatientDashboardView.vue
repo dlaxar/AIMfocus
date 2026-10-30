@@ -33,7 +33,10 @@
 
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <p v-else-if="screen?.error" class="error" role="alert">{{ screen.error }}</p>
-        <div v-else-if="!tiers.length" class="tiers-loading"><AIMfocusChase /></div>
+        <div v-else-if="!tiers.length" class="tiers-loading">
+          <AIMfocusChase />
+          <p v-if="screen?.status === 'complete'" class="tiers-empty muted">No information was found for this patient.</p>
+        </div>
 
         <p v-if="screen?.contradictions?.length" class="cx-banner">
           <ContradictionBadge :ids="screen.contradictions.map((c) => c.contradiction_id)" />
@@ -216,8 +219,14 @@ onMounted(async () => {
     return
   }
   try {
-    screen.value = await getScreen(session.currentId)
-    if (screen.value.status !== 'complete') {
+    const t0 = performance.now()
+    const s = await getScreen(session.currentId)
+    if (s.status === 'complete') {
+      // Already built, nothing streams: the clinician only waited for this request
+      s.timings_ms = { ...s.timings_ms, fast_first_response: performance.now() - t0 }
+    }
+    screen.value = s
+    if (s.status !== 'complete') {
       stop = watchScreen(session.currentId, (s) => (screen.value = s))
     }
   } catch (e) {
@@ -510,6 +519,11 @@ function autoResize(e) {
 .tiers-loading {
   max-width: 320px;
   margin: 48px auto 0;
+}
+.tiers-empty {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
 }
 
 /* ── Chat thread ────────────────────────────────────── */
