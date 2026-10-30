@@ -539,10 +539,19 @@ holds English text (the field name is kept for existing code). Codes are the rec
 
 Picking the patient: the situation screen is created before the patient is known, so it is
 built for the default patient. When the clinician picks a patient, call
-`PUT /api/v2/screens/<id>/patient` once with the search result's `id`. The core cancels the
-builds for the earlier patient and builds the screen again under the same ID; then load and
-stream it as before (`GET /api/v2/screens/<id>`, `/stream`). Calling it again with the same
+`PUT /api/v2/screens/<id>/patient` once with the search result's `id`; then load and stream
+the screen as before (`GET /api/v2/screens/<id>`, `/stream`). Calling it again with the same
 patient changes nothing; a chat started for the earlier patient continues as a new chat.
+
+**No new LLM call when the patient is picked.** When the situation is submitted, both models
+(Haiku and Opus) start at once: the selection for the default patient, and the same screen
+*planned without any patient* (which cards the role needs, and how to recognise their facts:
+fact types, terms, measurement keys, derived facts). Picking the default patient keeps the
+screen as it is. Picking another patient applies the plans to that patient's facts in code
+(about 5 ms): the documented cards are there at once, only the text search for cards that
+patient's facts cannot fill runs (and streams in), and the Opus screen follows when its plan
+is applied. If the patient is picked before a plan is ready (it takes about 4–6 s), the cards
+appear as soon as it is.
 
 Unknown patient: `404`. Chat with a `patient_id` that differs from its screen's patient: `400`.
 

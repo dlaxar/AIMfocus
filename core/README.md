@@ -169,6 +169,11 @@ chat): [docs/screen-api.md](docs/screen-api.md).
 | `GET` | `/api/v2/chat/{chat_id}` | The conversation so far |
 | `GET` | `/healthz` | Cache loaded, manifest version |
 
+Picking the patient after the situation (`PUT /api/v2/screens/<id>/patient`) needs no LLM call:
+with the situation, both models also plan the screen without a patient (`app/fastpath/plan.py`,
+prompt `fp_plan.md`), and the plan is applied to the picked patient's facts in code.
+`SCREEN_PLAN=false` switches the plans off (picking another patient then rebuilds the screen).
+
 Screens are built twice in parallel: `RUNTIME_MODEL` (Haiku 5.5, shown first) and
 `UPGRADE_MODEL` (Opus 5.5, `UPGRADE_EFFORT=low`); the Opus screen replaces the fast one under
 the same ID when it is done (`upgrade: running → done`). `UPGRADE_MODEL=` switches it off.
