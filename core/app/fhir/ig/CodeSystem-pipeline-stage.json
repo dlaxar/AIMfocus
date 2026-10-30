@@ -1,0 +1,31 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "pipeline-stage",
+  "url": "https://oachkatzlschwoaf.example/fhir/CodeSystem/pipeline-stage",
+  "name": "PipelineStage",
+  "status": "draft",
+  "content": "complete",
+  "caseSensitive": true,
+  "concept": [
+    {
+      "code": "s0",
+      "display": "Documents and passages"
+    },
+    {
+      "code": "s1",
+      "display": "Fact extraction"
+    },
+    {
+      "code": "s2",
+      "display": "Merge, concepts, derived facts"
+    },
+    {
+      "code": "s3",
+      "display": "Contradictions"
+    },
+    {
+      "code": "s4",
+      "display": "Export / manifest"
+    }
+  ]
+}

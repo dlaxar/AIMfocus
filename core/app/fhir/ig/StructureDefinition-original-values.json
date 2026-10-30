@@ -1,0 +1,56 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "original-values",
+  "url": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/original-values",
+  "name": "OriginalValues",
+  "title": "Our object as JSON",
+  "status": "draft",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DomainResource"
+    },
+    {
+      "type": "element",
+      "expression": "Element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "description": "The pipeline's own record of this resource (fact, document metadata, concept, contradiction) as JSON, so the cache can be read back without loss.",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Our object as JSON",
+        "definition": "The pipeline's own record of this resource (fact, document metadata, concept, contradiction) as JSON, so the cache can be read back without loss.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/original-values"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

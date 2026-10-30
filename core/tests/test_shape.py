@@ -79,6 +79,17 @@ def test_table_keeps_item_first_and_few_columns():
     assert var.table.rows[0].fact_id == "F:A:med:01"                               # the derived row stands for its input
 
 
+def test_codes_come_separately_from_the_text():
+    facts = [_fact("F:A:mea:01", "measurement", "C:meas:body_weight", "2016-04-15", "Weight 66 kg", value="66", unit="kg")]
+    store = _Store(facts)
+    store.codes = {"F:A:mea:01": [{"system": "http://loinc.org", "code": "29463-7", "display": "Body weight"}]}
+    var = _var("trend")
+    shape.shape_documented(var, SelectedVariable(name="v", label="V"), facts, store, "2016-04-15")
+    point = var.series[0].points[0]
+    assert [(c.system, c.code) for c in point.codes] == [("LOINC", "29463-7")]
+    assert var.series[0].code.code == "29463-7" and "29463-7" not in var.series[0].name + var.headline.text
+
+
 def test_list_shows_a_repeated_diagnosis_once():
     facts = [_fact("F:A:dia:01", "diagnosis", "C:dx:hypertension", "2015-06-28", "Arterial hypertension"),
              _fact("F:B:dia:01", "diagnosis", "C:dx:hypertension", "2016-04-15", "Arterial hypertension")]

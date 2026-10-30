@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "contradiction-report",
+  "url": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/contradiction-report",
+  "name": "ContradictionReport",
+  "title": "The finder's record of a finding as JSON",
+  "status": "draft",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DetectedIssue"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "description": "Rule, certainty, rationale and judge verdict of the contradiction finder, with the finding's position in the report.",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "The finder's record of a finding as JSON",
+        "definition": "Rule, certainty, rationale and judge verdict of the contradiction finder, with the finding's position in the report.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/contradiction-report"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -132,6 +132,11 @@ data/                     gitignored – IBM patient data
 
 ## API
 
+Patient cache as FHIR R4: the pipeline ends by writing `cache/<patient>/fhir.json` (one
+validated Bundle; ICD-10-GM / ATC / LOINC codes), and the runtime reads it (`CACHE_FORMAT=auto`).
+`python -m preprocess.convert_cache` builds it from an existing cache, `python -m
+preprocess.validate_fhir` checks it with the official HL7 validator. Details: [docs/fhir-plan.md](docs/fhir-plan.md).
+
 JSON reference for the frontend (screen variables, output types, contradictions, sources,
 chat): [docs/screen-api.md](docs/screen-api.md).
 

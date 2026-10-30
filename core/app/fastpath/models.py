@@ -93,6 +93,14 @@ VariableState = Literal[
 ]
 
 
+class Coding(BaseModel):
+    """A standard code for a fact – shown next to the text, never in it."""
+    system: str                                 # "ICD-10" · "ATC" · "LOINC"
+    code: str                                   # e.g. "C50.9", "B01AC06", "29463-7"
+    display: Optional[str] = None               # the code's own name (LOINC), not the screen text
+    uri: str                                    # FHIR system URI, e.g. "http://loinc.org"
+
+
 class Entry(BaseModel):
     """One fact as shown: a value, a history row or a list item. Always with source and contradictions."""
     fact_id: Optional[str] = None               # None for a value found by the text search
@@ -101,6 +109,7 @@ class Entry(BaseModel):
     status: Optional[str] = None                # list items: "open" / "done" / diagnosis status …
     source: Optional[Source] = None
     contradiction_ids: list[str] = Field(default_factory=list)
+    codes: list[Coding] = Field(default_factory=list)
 
 
 class Headline(BaseModel):
@@ -117,11 +126,13 @@ class TrendPoint(BaseModel):
     fact_id: str
     source: Optional[Source] = None
     contradiction_ids: list[str] = Field(default_factory=list)
+    codes: list[Coding] = Field(default_factory=list)
 
 
 class Series(BaseModel):
     name: str                                   # e.g. "Body weight", "Systolic"
     unit: str = ""
+    code: Optional[Coding] = None               # LOINC of the measured quantity, e.g. 29463-7
     points: list[TrendPoint] = Field(default_factory=list)   # oldest first
 
 
@@ -131,6 +142,7 @@ class TableRow(BaseModel):
     date: Optional[str] = None
     source: Optional[Source] = None
     contradiction_ids: list[str] = Field(default_factory=list)
+    codes: list[Coding] = Field(default_factory=list)
 
 
 class Table(BaseModel):

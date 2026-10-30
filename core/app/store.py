@@ -38,6 +38,7 @@ class FactStore:
         self.contradictions: list[Contradiction] = []
         self.fact_sheet: str = ""
         self.manifest: Optional[CacheManifest] = None
+        self.codes: dict[str, list[dict]] = {}   # fact_id → standard codings (ICD-10, ATC, LOINC)
 
         # Reverse indices
         self._passage_by_doc: dict[str, list[str]] = {}     # doc_id → [passage_id]
@@ -50,32 +51,49 @@ class FactStore:
 
     def load(self, cache_dir: Path, patient_id: str) -> None:
         out_dir = cache_dir / patient_id
-        manifest_path = out_dir / "manifest.json"
+        fhir_path = out_dir / "fhir.json"
+        self.source = "json"
+        if settings.CACHE_FORMAT != "json" and fhir_path.exists():
+            from app import fhir
+            fhir_cache = fhir.load(fhir_path)
+            artifacts = fhir_cache.data
+            self.codes = fhir_cache.codes
+            self.source = "fhir"
 
-        if not manifest_path.exists():
+            def read(name: str, default=None):
+                return artifacts.get(name, default)
+        elif settings.CACHE_FORMAT == "fhir":
+            raise RuntimeError(f"CACHE_FORMAT=fhir but {fhir_path} does not exist. Run: python -m preprocess.convert_cache")
+        else:
+            def read(name: str, default=None):
+                path = out_dir / f"{name}.json"
+                return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+
+        manifest = read("manifest")
+        if manifest is None:
             raise RuntimeError(
-                f"Cache manifest not found at {manifest_path}. "
+                f"Cache manifest not found in {out_dir}. "
                 "Run: python -m preprocess.run --patient " + patient_id
             )
 
-        self.manifest = CacheManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-        logger.info("Store: loading cache v%s (coverage %.1f%%)", self.manifest.completed_at, self.manifest.coverage_pct)
+        self.manifest = CacheManifest.model_validate(manifest)
+        logger.info("Store: loading %s cache v%s (coverage %.1f%%)", self.source, self.manifest.completed_at, self.manifest.coverage_pct)
 
         # Documents
-        raw_docs = json.loads((out_dir / "documents.json").read_text(encoding="utf-8"))
+        raw_docs = read("documents", [])
         for d in raw_docs:
             doc = Document.model_validate(d)
             self.documents[doc.doc_id] = doc
 
         # Passages
-        raw_passages = json.loads((out_dir / "passages.json").read_text(encoding="utf-8"))
+        raw_passages = read("passages", [])
         for p_raw in raw_passages:
             p = Passage.model_validate(p_raw)
             self.passages[p.passage_id] = p
             self._passage_by_doc.setdefault(p.doc_id, []).append(p.passage_id)
 
         # Facts
-        raw_facts = json.loads((out_dir / "facts.json").read_text(encoding="utf-8"))
+        raw_facts = read("facts", [])
         for f_raw in raw_facts:
             f = Fact.model_validate(f_raw)
             self.facts[f.fact_id] = f
@@ -84,7 +102,7 @@ class FactStore:
                 self._facts_by_concept.setdefault(f.concept_id, []).append(f.fact_id)
 
         # Derived facts
-        raw_derived = json.loads((out_dir / "derived.json").read_text(encoding="utf-8"))
+        raw_derived = read("derived", [])
         for d_raw in raw_derived:
             df = DerivedFact.model_validate(d_raw)
             self.derived[df.fact_id] = df
@@ -94,22 +112,29 @@ class FactStore:
             self.derived[age.fact_id] = age
 
         # Concepts
-        raw_concepts = json.loads((out_dir / "concepts.json").read_text(encoding="utf-8"))
+        raw_concepts = read("concepts", [])
         for c_raw in raw_concepts:
             c = Concept.model_validate(c_raw)
             self.concepts[c.concept_id] = c
 
         # Contradictions
-        contradictions_path = out_dir / "contradictions.json"
-        if contradictions_path.exists():
-            raw_cx = json.loads(contradictions_path.read_text(encoding="utf-8"))
+        raw_cx = read("contradictions")
+        if raw_cx is not None:
             self.contradictions = [Contradiction.model_validate(x) for x in raw_cx]
             for cx in self.contradictions:
                 cx.fact_ids = self._facts_in_passages(set(cx.passage_ids))
 
+        if self.source == "json":   # same codes the FHIR bundle carries
+            self.codes = self._standard_codes(raw_facts, raw_passages, patient_id)
+
         # Fact sheet (for the answerer prompt)
+        # (fhir.json does not store it; it is rebuilt exactly as S4 writes it)
         fact_sheet_path = out_dir / "fact_sheet.txt"
-        if fact_sheet_path.exists():
+        if self.source == "fhir":
+            from preprocess.s4_export import build_fact_sheet
+            self.fact_sheet = build_fact_sheet(
+                patient_id, [Fact.model_validate(f) for f in raw_facts], [DerivedFact.model_validate(d) for d in raw_derived])
+        elif fact_sheet_path.exists():
             self.fact_sheet = fact_sheet_path.read_text(encoding="utf-8")
 
         logger.info(
@@ -151,6 +176,16 @@ class FactStore:
 
     def contradictions_for_concepts(self, concept_ids: set[str]) -> list[Contradiction]:
         return [cx for cx in self.contradictions if set(cx.concept_ids) & concept_ids]
+
+    @staticmethod
+    def _standard_codes(raw_facts: list[dict], raw_passages: list[dict], patient_id: str) -> dict[str, list[dict]]:
+        from app.fhir.codes import ibm_codes, loinc_coding
+        from app.fhir.mapping import is_numeric
+        codes, _stats = ibm_codes(settings.DATA_DIR, patient_id, raw_facts, raw_passages)
+        for f in raw_facts:
+            if f.get("type") == "measurement" and is_numeric(f) and loinc_coding(f.get("concept_id")):
+                codes[f["fact_id"]] = codes.get(f["fact_id"], []) + loinc_coding(f.get("concept_id"))
+        return codes
 
     def _facts_in_passages(self, passage_ids: set[str]) -> list[str]:
         """Facts extracted from these passages or copies of them, plus derived facts built on them."""
