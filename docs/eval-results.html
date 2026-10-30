@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIMfocus Results</title>
+<!-- Render: chromium --headless=new --hide-scrollbars --window-size=1920,1080 --force-device-scale-factor=2
+     --virtual-time-budget=4000 --screenshot=$PWD/eval-results.png file://$PWD/eval-results.html -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* frontend/src/style.css; navy from the AIMfocus logo */
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --border: #d9dbe0;
+    --text-primary: #1c2024;
+    --text-secondary: #5c5f68;
+    --text-muted: #80838d;
+    --navy: #17324a;
+    --accent: rgb(60, 133, 132);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 90% -10%, rgba(60,133,132,.12), transparent 60%),
+      var(--bg);
+    color: var(--text-primary);
+    font-family: Inter, system-ui, sans-serif;
+    padding: 96px 96px 88px;
+    display: flex; flex-direction: column; justify-content: center; gap: 72px;
+  }
+  header { position: relative; }
+  .logo { position: absolute; right: 0; top: -12px; height: 132px; }
+  .kicker { font-size: 22px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+  h1 { font-size: 88px; font-weight: 800; color: var(--navy); letter-spacing: -.03em; margin-top: 14px; line-height: 1.05; }
+  h1 .accent { color: var(--accent); }
+
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; }
+  .tile {
+    background: var(--surface); box-shadow: 0 1px 2px rgba(28,32,36,.04), 0 8px 24px rgba(28,32,36,.05);
+    border: 1px solid var(--border); border-radius: 24px;
+    padding: 40px 34px 34px; display: flex; flex-direction: column;
+  }
+  .tile .label { font-size: 27px; font-weight: 700; color: var(--text-primary); line-height: 1.2; white-space: nowrap; }
+  .tile .value { font-size: 128px; font-weight: 800; color: var(--navy); letter-spacing: -.04em; line-height: 1; margin-top: 64px; font-variant-numeric: tabular-nums; }
+  .tile .value small { font-size: 56px; font-weight: 700; color: var(--text-muted); letter-spacing: -.01em; }
+  .tile .note { font-size: 22px; color: var(--text-secondary); margin-top: 14px; min-height: 28px; }
+  .tile .note b { color: var(--navy); font-weight: 700; }
+  .tile .target {
+    margin-top: 32px; padding-top: 22px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; font-size: 22px; color: var(--text-secondary); white-space: nowrap;
+  }
+  .check { width: 30px; height: 30px; flex: none; }
+
+  footer { margin-top: 8px; font-size: 22px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <header>
+    <img class="logo" src="aimfocus-logo.png" alt="AIMfocus">
+    <div class="kicker">Track 1 · 5 challenge situations</div>
+    <h1>All five metrics <span class="accent">on target</span></h1>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <footer>Claude Haiku 5.5 answers first; Claude Opus 5.5 refines the screen in parallel.</footer>
+
+<script>
+const CHECK = `<svg class="check" viewBox="0 0 26 26"><circle cx="13" cy="13" r="13" fill="rgb(60,133,132)"/><path d="M7.5 13.5l3.7 3.7 7.3-8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const tiles = [
+  { label: "Correct answers", value: "15<small>/15</small>", target: "Target 15 of 15" },
+  { label: "Traceability", value: "100<small>%</small>", target: "Target 100%" },
+  { label: "Invented facts", value: "0", target: "Target 0" },
+  { label: "Contradictions", value: "8", target: "Target 5 or more" },
+  { label: "Slowest first response", value: "1.8<small> s</small>", note: "median 117 ms", target: "Target under 10 s" },
+];
+document.getElementById("tiles").innerHTML = tiles.map(t => `
+  <div class="tile">
+    <div class="label">${t.label}</div>
+    <div class="value">${t.value}</div>
+    <div class="note">${t.note ?? ""}</div>
+    <div class="target">${CHECK}<span>${t.target}</span></div>
+  </div>`).join("");
+</script>
+</body>
+</html>
