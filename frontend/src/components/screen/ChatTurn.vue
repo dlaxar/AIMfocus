@@ -32,6 +32,7 @@ import ValueTable from './ValueTable.vue'
 import DataTable from './DataTable.vue'
 import ListGroup from './ListGroup.vue'
 import TrendGroup from './TrendGroup.vue'
+import ImageGroup from './ImageGroup.vue'
 import AIMfocusChase from '../aimfocus-chase/AIMfocusChase.vue'
 import { groupIntoBlocks } from './layout.js'
 
@@ -41,7 +42,7 @@ const props = defineProps({
   turn: { type: Object, required: true },
 })
 
-const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends: TrendGroup }
+const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends: TrendGroup, images: ImageGroup }
 
 const blocks = computed(() => groupIntoBlocks(
   [...props.turn.cards].sort((a, b) => a.priority - b.priority),

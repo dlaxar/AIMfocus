@@ -1,6 +1,6 @@
 // Turns the screen's variables into a reading order: tiers top to bottom, and inside a tier
 // a few blocks that aggregate variables of the same kind (all single values in one table,
-// all tables merged into one, lists together, trends together).
+// all tables merged into one, lists together, trends together, images together).
 
 export const TIERS = ['critical', 'important', 'background']
 
@@ -11,7 +11,8 @@ const COLUMN_ORDER = ['item', 'strength', 'schedule', 'route', 'class', 'status'
 const ROW_ONLY_STATES = new Set(['not_documented', 'not_available'])
 
 function blockKind(v) {
-  if (ROW_ONLY_STATES.has(v.state) || v.output === 'image') return 'values'
+  if (ROW_ONLY_STATES.has(v.state)) return 'values'
+  if (v.output === 'image') return v.state === 'pending' || v.items?.some((i) => i.source?.image) ? 'images' : 'values'
   if (v.output === 'table') return v.state === 'pending' || v.table?.rows?.length ? 'tables' : 'values'
   if (v.output === 'list') return v.state === 'pending' || v.items?.length ? 'lists' : 'values'
   if (v.output === 'trend') return v.state === 'pending' || v.series?.some((s) => s.points.length) ? 'trends' : 'values'

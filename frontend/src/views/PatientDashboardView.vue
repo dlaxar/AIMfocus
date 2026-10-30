@@ -155,6 +155,7 @@ import ValueTable from '../components/screen/ValueTable.vue'
 import DataTable from '../components/screen/DataTable.vue'
 import ListGroup from '../components/screen/ListGroup.vue'
 import TrendGroup from '../components/screen/TrendGroup.vue'
+import ImageGroup from '../components/screen/ImageGroup.vue'
 import AppFooter from '../components/AppFooter.vue'
 import { groupByTier } from '../components/screen/layout.js'
 import { formatDate } from '../components/screen/format.js'
@@ -191,7 +192,7 @@ const TIER_HINT = {
   important: 'for this task',
   background: 'context',
 }
-const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends: TrendGroup }
+const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends: TrendGroup, images: ImageGroup }
 
 const tiers = computed(() => (screen.value ? groupByTier(screen.value.variables ?? []) : []))
 const backgroundOpen = ref(false)
