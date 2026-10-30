@@ -34,6 +34,10 @@ from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
 from app.store import FactStore, UnknownPatient, available_patients, get_store, load_store
 
+# uvicorn only configures its own loggers; without this, app.* INFO logs are dropped.
+logging.basicConfig(format="%(levelname)s:     %(name)s - %(message)s")
+logging.getLogger("app").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

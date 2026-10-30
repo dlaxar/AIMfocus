@@ -601,6 +601,8 @@ async def _build(screen: FastScreen, store: FactStore, t0: float, max_variables:
 
     screen.role, screen.task = selected.role, selected.task
     screen.timings_ms["select"] = _elapsed_ms(t0)
+    logger.info("fastpath: select for screen %s returned %d variables (%.1f s)",
+                screen.screen_id, len(selected.variables), screen.timings_ms["select"] / 1000)
     for v in sorted(selected.variables, key=lambda v: v.priority):
         if max_variables is not None and len(screen.variables) >= max_variables:
             break
