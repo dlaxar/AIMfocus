@@ -159,8 +159,14 @@ import AppFooter from '../components/AppFooter.vue'
 import { groupByTier } from '../components/screen/layout.js'
 import { formatDate } from '../components/screen/format.js'
 import '../components/screen/screen.css'
-import { getScreen, watchScreen, askChat } from '../api.js'
+import { useRoute } from 'vue-router'
+import { getScreen, watchScreen, watchSimulatedScreen, askChat } from '../api.js'
 import { session, form } from '../store.js'
+
+// Replay the recorded screens (core: /api/v2/simulated/stream) instead of the live session:
+// open #/patient/dashboard?simulate, or set VITE_SIMULATE_SCREEN=1 in frontend/.env.local
+const route = useRoute()
+const simulate = 'simulate' in route.query || import.meta.env.VITE_SIMULATE_SCREEN === '1'
 
 const patient = computed(() => form.patientData)
 const patientMeta = computed(() => {
@@ -198,6 +204,10 @@ const contradictionIndex = computed(() => new Map(
 provide('contradictionIndex', contradictionIndex)
 
 onMounted(async () => {
+  if (simulate) {
+    stop = watchSimulatedScreen((s) => (screen.value = s), () => (error.value = 'Simulated stream failed'))
+    return
+  }
   if (!session.currentId) {
     error.value = 'No active session – start on the first screen.'
     return

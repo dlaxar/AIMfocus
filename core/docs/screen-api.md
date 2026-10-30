@@ -13,6 +13,7 @@ machine-readable schema is the core's OpenAPI document: `http://127.0.0.1:8001/o
 | Clinician enters the situation | `POST /api/v2/screens` with `{"situation": "…", "patient_id"?: "…"}` | the screen at once (`202`); `screen.screen_id` is the session ID, `screen.status = "starting"`; without `patient_id` the IBM patient (section 10) |
 | Screen fills in (while the patient is picked) | `GET /api/v2/screens/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
 | … or poll | `GET /api/v2/screens/<id>` · `?wait=true` blocks until complete | the screen |
+| Demo without the LLM | `GET /api/v2/simulated/stream?interval=1` (SSE) | the same events, replaying the recorded screens in `streams/<n>.json` `interval` s apart |
 | Short card title | `GET /api/v2/screens/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
 | Patient search | `GET /api/v2/patients/search?q=<text>&limit=10` | patients whose name or ID contains the text (section 9) |
 | Show a source in its section | `GET /api/passages/<passage_id>/context` | the passage and the document section around it (section 6) |

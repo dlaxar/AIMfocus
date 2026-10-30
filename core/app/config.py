@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Defaults are anchored to this package, so the service works from any working directory
     DATA_DIR: Path = _CORE_DIR.parent / "data"
     CACHE_DIR: Path = _CORE_DIR / "cache"
+    # Recorded screen updates (0.json, 1.json, …) replayed by /api/v2/simulated/stream
+    STREAMS_DIR: Path = _CORE_DIR.parent / "streams"
     PATIENT_ID: str = "0000-0001"
 
     # Google's SDK convention is GOOGLE_API_KEY; GEMINI_API_KEY is accepted too

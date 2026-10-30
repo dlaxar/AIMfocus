@@ -42,7 +42,17 @@ export async function getSessionSummary(sessionId) {
 // Live updates while the core searches the documents for missing items.
 // Calls onScreen(screen) for every update; returns a function that stops listening.
 export function watchScreen(sessionId, onScreen, onError) {
-  const source = new EventSource(`${BASE_URL}/v2/screens/${encodeURIComponent(sessionId)}/stream`)
+  return watchStream(`${BASE_URL}/v2/screens/${encodeURIComponent(sessionId)}/stream`, onScreen, onError)
+}
+
+// Same events, replayed from the recorded screens in streams/ (one per `interval` seconds),
+// so the dashboard can be shown without the LLM.
+export function watchSimulatedScreen(onScreen, onError, interval = 1) {
+  return watchStream(`${BASE_URL}/v2/simulated/stream?interval=${interval}`, onScreen, onError)
+}
+
+function watchStream(url, onScreen, onError) {
+  const source = new EventSource(url)
   source.addEventListener('screen', (e) => onScreen(JSON.parse(e.data)))
   source.addEventListener('done', () => source.close())
   source.onerror = () => {

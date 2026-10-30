@@ -11,15 +11,18 @@ app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
   GET  /api/v2/screens?situation=...      same, for quick tests from a browser / curl
   GET  /api/v2/screens/{id}[?wait=true]   current state; wait=true blocks until complete
   GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update, then "done"
+  GET  /api/v2/simulated/stream[?interval=1]  same SSE, replaying the recorded screens in streams/
 """
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, AsyncGenerator, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from app.config import settings
 from app.fastpath import service
 from app.fastpath.models import FastScreen, ScreenRequest
 from app.runtime.screen import _best_passage_id, _build_source
@@ -152,5 +155,27 @@ async def stream_screen(screen_id: str) -> StreamingResponse:
                 yield "event: done\ndata: {}\n\n"
                 return
             await asyncio.sleep(0.2)
+
+    return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+@router.get("/simulated/stream")
+async def stream_simulated(interval: float = Query(1.0, ge=0, le=60)) -> StreamingResponse:
+    """Replays streams/0.json, 1.json, … as "screen" events, `interval` seconds apart, then "done"."""
+    files = sorted(
+        (p for p in settings.STREAMS_DIR.glob("*.json") if p.stem.isdigit()),
+        key=lambda p: int(p.stem),
+    )
+    if not files:
+        raise HTTPException(status_code=404, detail=f"No recorded screens in {settings.STREAMS_DIR}")
+    # Read up front so a broken file fails the request instead of the stream half-way
+    screens = [json.loads(p.read_text(encoding="utf-8")) for p in files]
+
+    async def _events() -> AsyncGenerator[str, None]:
+        for i, screen in enumerate(screens):
+            if i:
+                await asyncio.sleep(interval)
+            yield f"event: screen\ndata: {json.dumps(screen, ensure_ascii=False)}\n\n"
+        yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(_events(), media_type="text/event-stream")
