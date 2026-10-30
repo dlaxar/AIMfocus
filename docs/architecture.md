@@ -104,8 +104,8 @@ sequenceDiagram
    existing passages; numbers must appear in the quotes. Otherwise the card says
    **not documented**.
 4. **Upgrade.** The same screen is built with Claude Opus 5.5 in parallel. When it is done it
-   replaces the fast screen under the same ID (`upgrade: running → done`), usually 7–12 s
-   after submit. Load time is measured on the fast screen.
+   replaces the fast screen under the same ID (`upgrade: running → done`). Load time is
+   measured on the fast screen.
 5. **Streaming.** The frontend receives whole screens over server-sent events
    (`/api/v2/screens/<id>/stream`): documented cards first, text-search results and the
    upgraded screen as they arrive. No diffs.

@@ -127,7 +127,7 @@ cache/                    gitignored – preprocessing output
 | Chat | One cached-prefix call per question (`chat`), same validation, up to 2 cards via the screen builder |
 
 Typical timings with Claude Haiku 5.5: documented cards after 2–4 s, complete screen after
-3–7 s, Opus upgrade after 7–12 s, chat answer about 2 s.
+3–7 s, chat answer about 2 s.
 
 ---
 
