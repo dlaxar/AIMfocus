@@ -5,7 +5,7 @@ Usage:
     python -m eval.run_eval
     python -m eval.run_eval --extra          # include situations_extra.md
     python -m eval.run_eval --judge          # LLM checks each question against the screen
-    python -m eval.run_eval --url http://localhost:8000 --cases-dir ../cases
+    python -m eval.run_eval --url http://localhost:8001 --cases-dir ../cases
 
 For each situation in <cases-dir>/situations.md (and optionally eval/situations_extra.md):
   1. POST "title. description" to /api/screen – never the check questions – and record
@@ -348,8 +348,8 @@ def run_eval(base_url: str, include_extra: bool, cases_dir: Path, use_judge: boo
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run eval against the running backend")
-    parser.add_argument("--url", default="http://localhost:8000", help="Backend base URL")
+    parser = argparse.ArgumentParser(description="Run eval against the running core service")
+    parser.add_argument("--url", default="http://localhost:8001", help="Core service base URL")
     parser.add_argument("--extra", action="store_true", help="Include situations_extra.md")
     parser.add_argument("--cases-dir", type=Path, default=None,
                         help="Folder with situations.md and expected.json (default: next to DATA_DIR)")

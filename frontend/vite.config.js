@@ -5,9 +5,9 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
-    // Forward API calls to the backend (e.g. FastAPI on :8000) to avoid CORS in dev
+    // Forward API calls to the core (FastAPI on :8001) to avoid CORS in dev
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/api': 'http://localhost:8001',
     },
   },
 })

@@ -1,22 +1,25 @@
 # Screen and chat API – JSON reference for the frontend
 
 Everything the frontend needs to render a patient screen, flag contradictions, open the
-source letter, and ask follow-up questions. All routes go through the Flask backend
-(`backend/app.py`, proxied under `/api`). The machine-readable schema is the core's
-OpenAPI document: `http://127.0.0.1:8001/openapi.json` (browsable at `/docs`).
+source letter, and ask follow-up questions. All routes are served by the core (FastAPI,
+`:8001`); the frontend reaches them through the Vite dev proxy under `/api`. The
+machine-readable schema is the core's OpenAPI document: `http://127.0.0.1:8001/openapi.json`
+(browsable at `/docs`).
 
 ## 1. Flow
 
 | Step | Call | Returns |
 |---|---|---|
-| Clinician enters the situation | `GET /api/session/get?situation=<base64 UTF-8>` | `{session_id, screen}` at once; `screen.status = "starting"` |
-| Screen fills in (while the patient is picked) | `GET /api/session/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
-| … or poll | `GET /api/session/<id>` · `?wait=true` blocks until complete | the screen |
-| Short card title | `GET /api/session/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
+| Clinician enters the situation | `POST /api/v2/screens` with `{"situation": "…"}` | the screen at once (`202`); `screen.screen_id` is the session ID, `screen.status = "starting"` |
+| Screen fills in (while the patient is picked) | `GET /api/v2/screens/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
+| … or poll | `GET /api/v2/screens/<id>` · `?wait=true` blocks until complete | the screen |
+| Short card title | `GET /api/v2/screens/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
+| Patient search | `GET /api/v2/patients/search?q=<text>&limit=10` | patients whose name or ID contains the text (section 9) |
+| Show a source in its section | `GET /api/passages/<passage_id>/context` | the passage and the document section around it (section 6) |
 | Open a source letter | `GET /api/documents/<doc_id>` | the letter's text and passages (section 6) |
-| Ask about the patient | `POST /api/session/<id>/chat` | an answer with sources (section 7) |
-| Ask, with cards, streamed | `POST /api/session/<id>/chat/stream` (SSE) | `answer` at once, then `cards` as they come, then `done` (section 7) |
-| Patient header (always shown) | `GET /api/patients/<patient_id>/profile` | name, birth date, age, CAVE, height / weight / BMI, latest stay (section 9) |
+| Ask about the patient | `POST /api/v2/chat` with `screen_id` | an answer with sources (section 7) |
+| Ask, with cards, streamed | `POST /api/v2/chat/stream` with `screen_id` (SSE) | `answer` at once, then `cards` as they come, then `done` (section 7) |
+| Patient header (always shown) | `GET /api/v2/patients/<patient_id>` | name, birth date, age, CAVE, height / weight / BMI, latest stay (section 9) |
 
 `screen.status`: `starting` (select call running, `variables` empty) → `partial`
 (documented items there, text search running) → `complete`. Every update raises
@@ -260,7 +263,24 @@ Linking is per passage: another finding in the same sentence can be flagged too.
 
 To highlight a source: `text.slice(source.start, source.end)` is the cited passage (or find
 `passage_id` in `passages`). `copy_of` names the passage a sentence was copied from in an
-earlier letter. Single passage: `GET /api/passages/<passage_id>` on the core.
+earlier letter. Single passage: `GET /api/passages/<passage_id>`.
+
+A source without the whole letter – the passage inside its section (e.g. the medication list
+around one drug): `GET /api/passages/<passage_id>/context`
+
+```jsonc
+{
+  "doc": {"doc_id": "12340018", "title": "Stat. Patientenbrief (Interne)", "date": "2016-04-15",
+          "type": "Arztbrief(Inter.)", "department": "3. Medizinische Abteilung mit Onkologie"},
+  "passage": {"passage_id": "12340018:p054", "kind": "table_row", "start": 2571, "end": 2604,
+              "text": "Thrombo ASS 100mg oral 1 0 0 0 ST", …},
+  "section": {"name": "Entlassungsmedikation", "start": 2511, "end": 2849,
+              "text": "Entlassungsmedikation:\nApplikation mo mi ab na Einheit Info\nThrombo ASS 100mg oral …"}
+}
+```
+
+Offsets are into the full document text, so highlight `passage.start - section.start` …
+inside `section.text` and open the full letter at the same place later.
 
 ### The original file (as delivered)
 
@@ -271,7 +291,7 @@ letter exactly as delivered:
 |---|---|
 | `GET /api/documents/<doc_id>/original` | `{doc_id, file, metadata, text}` – `text` is the original HTML (`<BR>`, `&uuml;` …), `metadata` the original header (title, date, department, admission …) |
 | `GET /api/passages/<passage_id>/original` | the same plus `raw_start`, `raw_end`, `raw_quote` (= `text.slice(raw_start, raw_end)`) and `quote` (the normalized passage) |
-| `GET /api/documents/<doc_id>/original/file` (core only) | the original JSON file, unchanged |
+| `GET /api/documents/<doc_id>/original/file` | the original JSON file, unchanged |
 
 ```jsonc
 // GET /api/passages/12340018:p054/original
@@ -288,8 +308,8 @@ Checked for all 349 passages of the patient: every raw span normalizes back to i
 ## 7. Chat
 
 ```
-POST /api/session/<session_id>/chat
-{"question": "Which blood thinner does she take?", "chat_id": "…optional, for follow-ups…"}
+POST /api/v2/chat
+{"question": "Which blood thinner does she take?", "screen_id": "<session_id>", "chat_id": "…optional, for follow-ups…"}
 ```
 
 ```jsonc
@@ -307,7 +327,7 @@ POST /api/session/<session_id>/chat
 About 2 s per answer. The chat knows the session's screen and the conversation, answers in the
 language of the question, names contradictions, and gives no treatment advice. Errors: `400`
 empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
-`GET /api/v2/chat/<chat_id>` on the core.
+`GET /api/v2/chat/<chat_id>`.
 
 ### Chat with cards (streamed)
 
@@ -322,8 +342,8 @@ work too), and a check that is missing comes back as `state: "not_documented"` w
 10 s, the first ones come at once.
 
 ```
-POST /api/session/<session_id>/chat/stream          (core: POST /api/v2/chat/stream)
-{"question": "What did the rectal examination in June 2015 show?", "chat_id": "…optional…"}
+POST /api/v2/chat/stream
+{"question": "What did the rectal examination in June 2015 show?", "screen_id": "<session_id>", "chat_id": "…optional…"}
 ```
 
 Server-sent events, in the order they are ready:
@@ -338,15 +358,15 @@ Server-sent events, in the order they are ready:
 `answer` and the first `cards` can come in either order. `"cards": false` streams only `answer`
 and `done`. Pass `chat_id` from the `answer` event with the next question for follow-ups.
 
-Measured through the Flask backend (Haiku 5.5): text 1.5–2.6 s, first cards 1.3–3.0 s, done
+Measured through the former Flask gateway (Haiku 5.5): text 1.5–2.6 s, first cards 1.3–3.0 s, done
 within 4.5 s; e.g. "What did the rectal examination show?" (not a stored fact) → a `list` card
 from the letter text; "Is a CPAP therapy documented?" → `not_documented` card.
 
-**Without streaming** – `POST /api/session/<session_id>/chat` with `"cards": true`:
+**Without streaming** – `POST /api/v2/chat` with `"cards": true`:
 
 ```
-POST /api/session/<session_id>/chat
-{"question": "How has her weight changed?", "cards": true, "wait": true}
+POST /api/v2/chat
+{"question": "How has her weight changed?", "screen_id": "<session_id>", "cards": true, "wait": true}
 ```
 
 ```jsonc
@@ -372,7 +392,7 @@ POST /api/session/<session_id>/chat
 | Request field | Default | Meaning |
 |---|---|---|
 | `cards` | `false` | also return cards; without it the chat answers in text only, as before |
-| `wait` | `false` | `false`: the reply comes as soon as the text is ready, with `cards: []` and `cards_screen_id` – stream the cards with `GET /api/session/<cards_screen_id>/stream` (or `/api/v2/screens/<id>/stream` on the core). `true`: the finished cards are in this reply (slower) |
+| `wait` | `false` | `false`: the reply comes as soon as the text is ready, with `cards: []` and `cards_screen_id` – stream the cards with `GET /api/v2/screens/<cards_screen_id>/stream`. `true`: the finished cards are in this reply (slower) |
 
 Examples from the live test (Haiku 5.5, 12 questions × 2 runs, all as expected):
 
@@ -401,11 +421,10 @@ Timing with `wait: true`: text answer about 1.6 s on average; the reply with car
 ## 9. Patient header
 
 What the frontend shows on every screen. Built in code from the patient file and the
-letters, no LLM, answers at once. Core route: `GET /api/v2/patients/<patient_id>`
-(404 for a patient that is not loaded).
+letters, no LLM, answers at once (404 for a patient that is not loaded).
 
 ```
-GET /api/patients/0000-0001/profile
+GET /api/v2/patients/0000-0001
 ```
 
 ```jsonc
@@ -431,6 +450,9 @@ GET /api/patients/0000-0001/profile
 
 Any field can be `null` (or `[]` for `allergies`) when it is not documented. An empty
 `allergies` list means no allergy is documented – show "no known allergies documented",
-not "no allergies". The patient search (`/api/patients/search`, `/api/patients/<id>`) is
-separate and unchanged.
+not "no allergies".
+
+The patient search, `GET /api/v2/patients/search?q=<text>&limit=10` (limit 1–50), returns the
+entries of every `data/*/patient.json` whose name or ID contains the text (case-insensitive),
+without `ward`; an empty `q` returns `[]`.
 

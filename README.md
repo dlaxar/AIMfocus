@@ -8,10 +8,7 @@ IBM AIM Hackathon · Track 1. A clinician types their role and task ("Anaestheti
 frontend/ (Vue + Vite, :5173)
    │  /api/* (Vite dev proxy)
    ▼
-backend/ (Flask gateway, :8000)          patients, sessions, documents
-   │  HTTP
-   ▼
-core/ (FastAPI, :8001)                   fact store + LLM pipeline
+core/ (FastAPI, :8001)                   patients, screens, documents, fact store + LLM pipeline
    ├─ offline:  S0 passages → S1 LLM fact extraction → S2 concepts/timelines/derived facts
    │            → S3 contradictions (rules + LLM judge) → S4 fact sheet      → core/cache/
    └─ runtime:  /api/v2/screens
@@ -25,9 +22,9 @@ core/ (FastAPI, :8001)                   fact store + LLM pipeline
 Validation is code, not LLM: every number, drug name, side and date shown must appear in the cited facts or passages; anything else is dropped or marked "check".
 
 ### Flow in the app
-1. "What are you looking for?" → `GET /api/session/get?situation=<base64>` starts the screen in the core. The documented part is computed right away, the text search keeps running in the background.
-2. Patient selection.
-3. Result screen: `GET /api/session/<id>` and live updates from `GET /api/session/<id>/stream` (SSE).
+1. "What are you looking for?" → `POST /api/v2/screens` with `{"situation": ...}` starts the screen in the core. The documented part is computed right away, the text search keeps running in the background.
+2. Patient selection (`GET /api/v2/patients/search?q=`).
+3. Result screen: `GET /api/v2/screens/<id>` and live updates from `GET /api/v2/screens/<id>/stream` (SSE).
 
 ### Models
 - Runtime: `gemini-2.5-flash` (select + derive calls)
@@ -48,11 +45,7 @@ cd core && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m preprocess.run --patient 0000-0001     # once, about 2 minutes
 .venv/bin/python -m uvicorn app.main:app --port 8001
 
-# 2. Flask gateway (new terminal)
-cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py
-
-# 3. Frontend (new terminal)
+# 2. Frontend (new terminal)
 cd frontend && npm install && npm run dev                   # http://localhost:5173
 ```
 
@@ -61,7 +54,7 @@ Tests (no API key needed): `cd core && LLM_FAKE=true .venv/bin/python -m pytest 
 ## Results on the 5 situations (2026-10-29)
 
 Fast path via `python -m eval.run_eval --v2`, answers checked by hand against `cases/expected.json`.
-`GET /api/session/get` returns the session ID at once; the times below run from that call until the screen is complete.
+`POST /api/v2/screens` returns the screen ID at once; the times below run from that call until the screen is complete.
 
 | Metric | gemini-3.5-flash-lite, thinking minimal (default) | gemini-3.8-flash, thinking low | Target |
 |---|---|---|---|
@@ -79,5 +72,4 @@ The fact store was extracted offline (`preprocess.run --offline-llm`) with Claud
 | Path | What |
 |---|---|
 | `frontend/` | Vue app: situation input (text or voice), patient search, result screen |
-| `backend/` | Flask gateway the frontend talks to; forwards screen requests to the core |
-| `core/` | Fact store, preprocessing pipeline, runtime API, validator, tests, eval (see `core/README.md`) |
+| `core/` | API the frontend talks to, fact store, preprocessing pipeline, validator, tests, eval (see `core/README.md`) |
