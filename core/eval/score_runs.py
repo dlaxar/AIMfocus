@@ -35,6 +35,13 @@ def side_left(L):
     return any("stenosis" in l.lower() and "left" in l.lower() for l in L)
 
 
+def carotid_right(L):
+    """Minimal right carotid plaques, checked per statement: "Hollenhorst plaques ... left > right" (eye card)
+    and the side-swapped copy "right internal carotid artery narrowing of about 60%" do not count."""
+    return any(has(s, "right") and has(s, "carotid", "ica") and has(s, "minimal", "without hemodynamic", "without haemodynamic")
+               for l in L for s in l.lower().split(";"))
+
+
 DRUGS = [("aspirin", "thrombo ass"), ("metformin", "glucophage"), ("simvastatin", "zocor"), ("candesartan", "blopress"),
          ("oleovit", "colecalciferol", "vitamin d"), ("alendron",), ("pioglitazone", "actos"), ("exenatide", "byetta")]
 NOREC = ("no later", "not documented", "no record", "no subsequent", "no follow", "no further", "not recorded", "no documented", "no completion", "no evidence")
@@ -73,7 +80,7 @@ C = {
  "11.1": lambda t, L: has(t, "60%") and has(t, "lvef", "ejection") and has(t, "thicken", "hypertroph", "septum"),
  "11.2": lambda t, L: has(t, "sinus") and has(t, "47"),
  "11.3": lambda t, L: has(t, "135/84"),
- "12.1": lambda t, L: side_left(L) and any("right" in l.lower() and has(l.lower(), "minimal", "plaque") for l in L),
+ "12.1": lambda t, L: side_left(L) and carotid_right(L),
  "12.2": lambda t, L: has(t, "ct") and has(t, "without contrast", "native") and has(t, "bleed", "haemorrhage", "hemorrhage"),
  "12.3": lambda t, L: has(t, "focal"),
  "13.1": lambda t, L: has(t, "6.4%"),

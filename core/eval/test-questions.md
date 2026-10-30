@@ -4,7 +4,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 
 31 Situationen, 93 Fragen.
 
-**Beantwortet** = in wie vielen der 2 letzten Testläufe der Bildschirm die erwartete Antwort enthielt (gesamt 178 von 186).
+**Beantwortet** = in wie vielen der 2 letzten Testläufe der Bildschirm die erwartete Antwort enthielt (gesamt 177 von 186).
 
 ## 1. Pre-operative anaesthesia check
 
@@ -43,7 +43,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
 | 4.1 | Has this happened before and what was found to be the cause? | Yes. In June 2015 she had a hypertensive crisis with dizziness and brief vision loss in the left eye (amaurosis fugax). It was put down to a 60% stenosis of the left internal carotid artery. | Konsil für Augenheilkunde (2015-06-13); Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
-| 4.2 | Is anything documented that matters before giving iodinated contrast (the dye for a CT scan of the blood vessels)? | Yes. She has a contrast media allergy (nausea, dizziness, vomiting). Her head CT in 2015 was done without contrast for that reason. She also takes metformin (Glucophage 1000 mg 1-1-1). Her kidney function is not documented. | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 1/2 |
+| 4.2 | Is anything documented that matters before giving iodinated contrast (the dye for a CT scan of the blood vessels)? | Yes. She has a contrast media allergy (nausea, dizziness, vomiting). Her head CT in 2015 was done without contrast for that reason. She also takes metformin (Glucophage 1000 mg 1-1-1). Her kidney function is not documented. | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 4.3 | Which antihypertensive (blood pressure drug) does she take and at what dose? | Candesartan (Blopress) 16 mg 1-0-1, as of April 2016. | Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 
 ## 5. Open follow-ups from the 2015 hospital stay
@@ -63,7 +63,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
 | 6.1 | What is the receptor status of the tumour? | Oestrogen receptor positive (100%, Allred 8), progesterone receptor positive (70%, Allred 7), HER2 negative; Ki-67 20%. | Histologie-Befund (2016-04-13); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
-| 6.2 | How old is she? | 57 years (born 15 March 1959). Calculated from the date of birth. | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Histologie-Befund (2016-04-13); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
+| 6.2 | How old is she? | 57 years (born 15 March 1959). Calculated from the date of birth. | Radiologischer Befund (2015-06-11); Langzeit-EKG (2015-06-12); 24h-RR-Messung (2015-06-13); Konsil für Augenheilkunde (2015-06-13); Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Histologie-Befund (2016-04-13); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 6.3 | Is anything documented about her bone health that matters for an aromatase inhibitor? | Yes. Vitamin D deficiency with osteoporosis; she takes alendronate 70 mg once a week and vitamin D drops (Oleovit D3, 2-0-2 drops). | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 
 ## 7. Ophthalmologist – follow-up visit
@@ -113,7 +113,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
 | 11.1 | What did the echocardiography show? | June 2015: normal systolic LV function (EF 60%), slight thickening of the left ventricle (septum 9 mm, posterior wall 9 mm, LA 36 mm), normal diastolic function, normal RV function (TAPSE 25 mm), no pulmonary hypertension (systolic PAP 22 mmHg), only minimal valve regurgitation. | Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
-| 11.2 | What did the Holter ECG show? | 18:53 hours: continuous sinus rhythm, heart rate 47–100 (mean 67)/min, no pauses, 20 supraventricular extrasystoles, no couplets, no complex ventricular arrhythmias. | Langzeit-EKG (2015-06-12); Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
+| 11.2 | What did the Holter ECG show? | 18:53 hours: continuous sinus rhythm, heart rate 47–100 (mean 67)/min, no pauses, 20 supraventricular extrasystoles, no couplets, no complex ventricular arrhythmias. | Langzeit-EKG (2015-06-12); Stat. Patientenbrief (Interne) (2015-06-28) | 1/2 |
 | 11.3 | What did the 24-hour blood pressure measurement show? | 24-hour mean 135/84 mmHg, day 140/88, night 128/80; raised blood pressure mainly in the morning, up to 170/85 mmHg (June 2015). | 24h-RR-Messung (2015-06-13) | 2/2 |
 
 ## 12. Neurologist – review of the 2015 episode
@@ -122,7 +122,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
-| 12.1 | What did the carotid duplex ultrasound show on each side? | Left internal carotid artery: up to 60% stenosis near its origin from calcified plaques, flow velocity 150 cm/s. Right: minimal calcified plaques without haemodynamic relevance. Vertebral arteries normal on both sides (11 June 2015). | Radiologischer Befund (2015-06-11) | 2/2 |
+| 12.1 | What did the carotid duplex ultrasound show on each side? | Left internal carotid artery: up to 60% stenosis near its origin from calcified plaques, flow velocity 150 cm/s. Right: minimal calcified plaques without haemodynamic relevance. Vertebral arteries normal on both sides (11 June 2015). | Radiologischer Befund (2015-06-11) | 0/2 |
 | 12.2 | What did the head CT show, and was contrast used? | Head CT on 11 June 2015, without contrast because of the contrast allergy: no bleeding, normal hemispheres and CSF spaces, atherosclerotic vessel damage in the left carotid siphon. | Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
 | 12.3 | Were focal neurological deficits found on admission? | No focal neurological deficits on admission. | Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
 
@@ -144,7 +144,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 |---|---|---|---|---|
 | 14.1 | Is SLE documented, and is an SLE treatment listed? | Systemic lupus erythematosus is listed as a diagnosis (2015 and 2016). No SLE-specific treatment is on the medication lists. | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 14.2 | Do the labs show signs of inflammatory or autoimmune activity? | No. In June 2015 the labs showed no signs of an inflammatory or autoimmune process. | Konsil für Augenheilkunde (2015-06-13); Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
-| 14.3 | What is documented about her bones? | Vitamin D deficiency with osteoporosis, treated with alendronate 70 mg once a week and vitamin D drops (Oleovit D3). | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
+| 14.3 | What is documented about her bones? | Vitamin D deficiency with osteoporosis, treated with alendronate 70 mg once a week and vitamin D drops (Oleovit D3). | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 1/2 |
 
 ## 15. Gastroenterologist – reflux
 
@@ -154,7 +154,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 |---|---|---|---|---|
 | 15.1 | Which reflux diagnosis and grade are documented? | Gastro-oesophageal reflux disease grade II, with a small axial hiatus hernia (2015). | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 15.2 | Does she take an acid-suppressing drug? | Not documented: no proton pump inhibitor or other acid-suppressing drug is on her medication lists. | – | 1/2 |
-| 15.3 | Which of her current medicines can irritate the oesophagus or stomach? | Alendronic acid 70 mg once a week (oesophageal irritation) and aspirin (Thrombo ASS) 100 mg in the morning (gastric mucosa). | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
+| 15.3 | Which of her current medicines can irritate the oesophagus or stomach? | Alendronic acid 70 mg once a week (oesophageal irritation) and aspirin (Thrombo ASS) 100 mg in the morning (gastric mucosa). | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 1/2 |
 
 ## 16. Dentist – planned tooth extraction
 
@@ -183,7 +183,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
 | 18.1 | Is sleep apnoea documented? | Yes, sleep apnoea is listed among her diagnoses (2015 and April 2016). | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05) | 2/2 |
-| 18.2 | Is a CPAP therapy documented? | Not documented. | – | 2/2 |
+| 18.2 | Is a CPAP therapy documented? | Not documented. | – | 1/2 |
 | 18.3 | Which BMI values are documented? | 29.4 (June 2015), 29 (4 April 2016) and 22.8 (April 2016 stay). The first two do not match the height and weight in the same letters. | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 
 ## 19. GP – blood pressure control in spring 2016
@@ -214,7 +214,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 |---|---|---|---|---|
 | 21.1 | Is there a documented aspiration risk? | Yes. Gastro-oesophageal reflux disease grade II and a small axial hiatus hernia. | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 21.2 | Is sleep apnoea documented? | Yes, sleep apnoea is listed among her diagnoses. | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05) | 2/2 |
-| 21.3 | What did her latest ECG show? | April 2016: heart rate 90/min, normal axis. | Stat. Patientenbrief (Interne) (2016-04-15) | 0/2 |
+| 21.3 | What did her latest ECG show? | April 2016: heart rate 90/min, normal axis. | Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 
 ## 22. Clinical coder – April 2016 stay
 
@@ -284,7 +284,7 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 |---|---|---|---|---|
 | 28.1 | Which lipid disorder is documented? | Hypercholesterolaemia / hyperlipidaemia. | Stat. Patientenbrief (Interne) (2015-06-28); Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
 | 28.2 | Which statin does she take, at what dose? | Simvastatin (Zocor) 20 mg in the evening (0-0-1). | Stat. Patientenbrief (Interne) (2015-06-28); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
-| 28.3 | Is an LDL cholesterol value documented? | Not documented: no lipid values appear in the letters. | – | 1/2 |
+| 28.3 | Is an LDL cholesterol value documented? | Not documented: no lipid values appear in the letters. | – | 2/2 |
 
 ## 29. Cardiac sonographer – echo comparison
 
@@ -313,5 +313,5 @@ Diese Fragen prüfen, ob der Bildschirm einer Rolle die richtigen Informationen 
 | # | Frage | Erwartete Antwort | Quellen | Beantwortet |
 |---|---|---|---|---|
 | 31.1 | When was the June 2015 stay? | Admitted 10 June 2015, discharged 14 June 2015. | Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
-| 31.2 | Why was she admitted in June 2015? | Hypertensive crisis with malaise, vertigo and brief partial vision loss. | Stat. Patientenbrief (Interne) (2015-06-28) | 1/2 |
+| 31.2 | Why was she admitted in June 2015? | Hypertensive crisis with malaise, vertigo and brief partial vision loss. | Stat. Patientenbrief (Interne) (2015-06-28) | 2/2 |
 | 31.3 | When was she admitted in April 2016? | 10 April 2016 according to the letter header and the planned admission; the letter text gives 12 April 2016 for the ward admission. | Ambulanter Patientenbrief (2016-04-05); Stat. Patientenbrief (Interne) (2016-04-15) | 2/2 |
