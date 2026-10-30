@@ -185,6 +185,11 @@ class ScreenVariable(BaseModel):
 class FastScreen(BaseModel):
     screen_id: str
     patient_id: str = ""
+    model: str = ""                             # the model this screen was built with
+    # The slower model's run (UPGRADE_MODEL), started with the screen: "running" → when it is
+    # done, its whole screen replaces this one (same screen_id, higher version, upgrade "done");
+    # "failed" → this one stays. None: no second run (chat cards, or switched off).
+    upgrade: Optional[Literal["running", "done", "failed"]] = None
     situation: str
     role: str = ""
     task: str = ""
@@ -203,3 +208,4 @@ class FastScreen(BaseModel):
 class ScreenRequest(BaseModel):
     situation: str
     patient_id: Optional[str] = None   # default: the configured patient (PATIENT_ID)
+    upgrade: bool = True               # also run UPGRADE_MODEL and swap its screen in when done

@@ -167,6 +167,10 @@ chat): [docs/screen-api.md](docs/screen-api.md).
 | `GET` | `/api/v2/chat/{chat_id}` | The conversation so far |
 | `GET` | `/healthz` | Cache loaded, manifest version |
 
+Screens are built twice in parallel: `RUNTIME_MODEL` (Haiku 5.5, shown first) and
+`UPGRADE_MODEL` (Opus 5.5, `UPGRADE_EFFORT=low`); the Opus screen replaces the fast one under
+the same ID when it is done (`upgrade: running → done`). `UPGRADE_MODEL=` switches it off.
+
 Every patient-specific route takes `patient_id` (query, or in the POST body of screens and
 chat); without it the default patient (`PATIENT_ID`) is used. Stores load on first use.
 

@@ -227,6 +227,8 @@ class AnthropicClient(LLMClient):
             kwargs["system"] = system
         if model_name == settings.RUNTIME_MODEL and settings.RUNTIME_EFFORT:
             kwargs["output_config"] = {"effort": settings.RUNTIME_EFFORT}
+        elif model_name == settings.UPGRADE_MODEL and settings.UPGRADE_EFFORT:
+            kwargs["output_config"] = {"effort": settings.UPGRADE_EFFORT}
         if model_name == settings.RUNTIME_MODEL and settings.RUNTIME_THINKING_BUDGET == 0:
             # Haiku 5.5 accepts this; Opus 5.5 rejects it (set RUNTIME_EFFORT=low there instead)
             kwargs["thinking"] = {"type": "disabled"}

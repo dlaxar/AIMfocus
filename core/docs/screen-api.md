@@ -25,6 +25,24 @@ machine-readable schema is the core's OpenAPI document: `http://127.0.0.1:8001/o
 (documented items there, text search running) → `complete`. Every update raises
 `screen.version`.
 
+**Two models per screen.** Every screen is built twice in parallel: with the fast model
+(Claude Haiku 5.5, shown first) and with Claude Opus 5.5 at low effort. When the Opus screen
+is complete it **replaces** the fast one under the same `screen_id`: the whole screen, with a
+higher `version`, `model: "claude-opus-5-5"` and `upgrade: "done"`. Nothing is sent as a diff –
+compare with the previous screen in the frontend if changes should be highlighted.
+
+| `upgrade` | Meaning |
+|---|---|
+| `running` | the fast screen is shown; the Opus screen will follow |
+| `done` | this is the Opus screen (final) |
+| `failed` | the Opus run failed; the fast screen stays (final) |
+| `null` | no second run (chat cards, or `"upgrade": false` in the POST body) |
+
+- Fetched after Opus is done (e.g. once the patient is picked): `GET /api/v2/screens/<id>` returns the Opus screen at once.
+- Still running: the SSE stream sends the fast screen as it fills, then the Opus screen as one more `event: screen`, then `event: done`. The stream ends only when `upgrade` is no longer `running`.
+- `?wait=true` waits for the fast screen; `?wait=true&final=true` also for the Opus screen.
+- Opus takes about 8–12 s per screen; chat cards stay on the fast model.
+
 Typical timings with the default model (Claude Haiku 5.5): first items after 2–4 s, complete
 screen after 3–7 s.
 
@@ -33,6 +51,9 @@ screen after 3–7 s.
 ```jsonc
 {
   "screen_id": "a1b2c3d4e5f6",            // = session_id
+  "patient_id": "0000-0001",
+  "model": "claude-haiku-5-5",             // the model this screen was built with
+  "upgrade": "running",                    // running · done · failed · null (section 1)
   "situation": "Ward nurse admitting her on 10 April 2016.",
   "role": "Ward nurse",
   "task": "Admission 10 Apr 2016: safety, meds, follow-up",
