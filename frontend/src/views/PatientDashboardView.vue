@@ -95,26 +95,16 @@
           </ul>
         </details>
 
-      <!-- ── Timings ──────────────────────────────────── -->
-      <div v-if="screen?.timings_ms" class="timings">
-        <span class="timings-label">Timings</span>
-        <dl class="timings-grid">
-          <template v-for="(val, key) in screen.timings_ms" :key="key">
-            <dt>{{ key.replace(/_/g, ' ') }}</dt>
-            <dd>{{ val.toFixed(1) }} ms</dd>
-          </template>
-        </dl>
-      </div>
-
-      <!-- ── Timings ──────────────────────────────────── -->
-      <div v-if="screen?.timings_ms" class="timings">
-        <span class="timings-label">Timings</span>
-        <dl class="timings-grid">
-          <template v-for="(val, key) in screen.timings_ms" :key="key">
-            <dt>{{ key.replace(/_/g, ' ') }}</dt>
-            <dd>{{ val.toFixed(1) }} ms</dd>
-          </template>
-        </dl>
+        <!-- ── Timings ──────────────────────────────────── -->
+        <div v-if="screen?.timings_ms" class="timings">
+          <span class="timings-label">Timings</span>
+          <dl class="timings-grid">
+            <template v-for="(val, key) in screen.timings_ms" :key="key">
+              <dt>{{ key.replace(/_/g, ' ') }}</dt>
+              <dd>{{ val.toFixed(1) }} ms</dd>
+            </template>
+          </dl>
+        </div>
       </div>
     </div>
 
@@ -242,29 +232,19 @@ function autoResize(e) {
 <style scoped>
 /* ── Layout ─────────────────────────────────────────── */
 /*
- * The dashboard needs to escape the 420px .screen wrapper on desktop.
- * We use a negative margin trick to cover the full viewport width,
- * then re-centre content with an inner max-width on larger screens.
+ * The dashboard uses the whole viewport: on this route the .screen wrapper drops its
+ * column width and padding, and the content re-centres with .screen-body's max-width.
  */
+:global(.screen:has(> .dashboard)) {
+  max-width: none;
+  padding: 0;
+}
+
 .dashboard {
   display: flex;
   flex-direction: column;
-  /* Break out of .screen's padding/max-width */
-  margin: -48px -24px -32px;
   min-height: 100dvh;
   background: var(--bg);
-  /* On desktop the .screen cap is irrelevant once we're full-width */
-  width: 100vw;
-  position: relative;
-  left: 50%;
-  right: 50%;
-  margin-left: -50vw;
-  margin-right: -50vw;
-}
-
-/* The breakout above leaves the .screen wrapper wider than the viewport; clip, don't scroll */
-:global(.screen:has(> .dashboard)) {
-  overflow-x: clip;
 }
 
 /* ── Header ─────────────────────────────────────────── */
@@ -549,50 +529,6 @@ function autoResize(e) {
 
 .error { color: #ce2c31; }
 .muted { color: var(--muted); }
-
-/* ── Timings ────────────────────────────────────────── */
-.timings {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.timings-label {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
-.timings-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 16px;
-  row-gap: 4px;
-  margin: 0;
-}
-
-.timings-grid dt {
-  font-size: 0.82rem;
-  color: var(--muted);
-  text-transform: capitalize;
-}
-
-.sources {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 0.85rem;
-}
-.doc { display: block; color: var(--muted); }
-q { font-style: italic; }
-.note { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
 
 /* ── Timings ────────────────────────────────────────── */
 .timings {
