@@ -24,7 +24,7 @@
             <span class="swatch" :style="{ background: colorOf(v, s) }" aria-hidden="true" />{{ seriesName(v, s) }}
           </span>
           <span
-            v-for="(p, i) in s.points"
+            v-for="(p, i) in visiblePoints(v, s)"
             :key="i"
             class="point-chip"
             :class="{ 'has-cx': p.contradiction_ids?.length }"
@@ -34,6 +34,15 @@
             <ContradictionBadge :ids="p.contradiction_ids ?? []" />
             <SourceButton :sources="p.source ? [p.source] : []" />
           </span>
+          <button
+            v-if="olderPoints(s).size"
+            type="button"
+            class="history-toggle"
+            :aria-expanded="!!expanded[key(v, s)]"
+            @click="expanded[key(v, s)] = !expanded[key(v, s)]"
+          >
+            {{ expanded[key(v, s)] ? 'Hide earlier' : `${olderPoints(s).size} earlier` }}
+          </button>
         </div>
       </template>
     </section>
@@ -41,6 +50,7 @@
 </template>
 
 <script setup>
+import { reactive } from 'vue'
 import ContradictionBadge from './ContradictionBadge.vue'
 import SourceButton from './SourceButton.vue'
 import StateTag from './StateTag.vue'
@@ -48,8 +58,28 @@ import TrendChart from './TrendChart.vue'
 import { formatDate } from './format.js'
 import { unplacedContradictions } from './layout.js'
 
-// Measured quantities over time: headline, a chart per unit, then every reading with its source.
+// Measured quantities over time: headline, a chart per unit, then the latest readings with their
+// source; earlier readings open on demand.
 defineProps({ variables: { type: Array, required: true } })
+
+const LATEST_CHIPS = 2
+const expanded = reactive({})
+
+function key(v, s) {
+  return `${v.name}/${s.name}`
+}
+
+// All but the latest few readings; a contradicted reading is never tucked away
+function olderPoints(s) {
+  const byDate = [...s.points].sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? '')))
+  return new Set(byDate.slice(0, -LATEST_CHIPS).filter((p) => !p.contradiction_ids?.length))
+}
+
+function visiblePoints(v, s) {
+  if (expanded[key(v, s)]) return s.points
+  const older = olderPoints(s)
+  return s.points.filter((p) => !older.has(p))
+}
 
 // Categorical slots in fixed order (validated palette; see the dataviz skill's reference palette)
 const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a']
