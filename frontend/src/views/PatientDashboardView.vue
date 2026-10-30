@@ -7,7 +7,9 @@
           <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <img src="../assets/logo.png" alt="Logo" class="header-logo" />
+      <router-link to="/" class="header-logo-link" aria-label="Home">
+        <img src="../assets/logo.png" alt="Logo" class="header-logo" />
+      </router-link>
     </header>
 
     <!-- ── Screen (scrollable body) ──────────────── -->
@@ -306,6 +308,10 @@ function autoResize(e) {
 }
 .back-btn:hover {
   color: var(--text);
+}
+
+.header-logo-link {
+  display: flex;
 }
 
 .header-logo {
