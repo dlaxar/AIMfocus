@@ -234,6 +234,32 @@ def _derive_bmi(facts: list[Fact]) -> list[DerivedFact]:
     return derived
 
 
+_DAYTIME = {"morgens": "1-0-0", "früh": "1-0-0", "mittags": "0-1-0", "abends": "0-0-1", "nachts": "0-0-0-1"}
+
+
+def _norm_strength(s: str) -> str:
+    """'100 mg' = '100mg', '5 mcg' = '5µg', '0,5' = '0.5'."""
+    s = str(s).lower().replace(" ", "").replace(",", ".").replace("µg", "mcg").replace("ug", "mcg")
+    return s
+
+
+def _norm_schedule(s: str) -> str:
+    """Same dosing written differently: 'morgens' = '1-0-0', '1-0-0-0' = '1-0-0',
+    '1x/Woche-1-Tabl.' = '1x/week-1-tablet', '2-0-2-0-drops' = '2-0-2'."""
+    s = str(s).lower().strip()
+    s = _DAYTIME.get(s, s)
+    s = s.replace("woche", "week").replace("wöchentlich", "1x/week").replace("tabl.", "tablet").replace("tablette", "tablet")
+    s = re.sub(r"[-\s]*(drops?|tropfen|doses?|hübe|puffs?|tablets?|stk\.?)\b", "", s)
+    s = re.sub(r"\s+", "", s)
+    m = re.fullmatch(r"(\d+(?:/\d+)?-\d+(?:/\d+)?-\d+(?:/\d+)?)-0", s)   # four slots, last one empty
+    return m.group(1) if m else s
+
+
+def _differs(a: str, b: str, norm) -> bool:
+    """A change only when both sides state the value and they differ after normalising."""
+    return bool(a) and bool(b) and norm(a) != norm(b)
+
+
 def _derive_med_changes(facts: list[Fact], concepts: dict[str, Concept]) -> list[DerivedFact]:
     """Detect schedule/strength changes for each medication concept."""
     derived: list[DerivedFact] = []
@@ -252,7 +278,7 @@ def _derive_med_changes(facts: list[Fact], concepts: dict[str, Concept]) -> list
             curr_sched = curr.fields.get("schedule", "")
             prev_str = prev.fields.get("strength", "")
             curr_str = curr.fields.get("strength", "")
-            if prev_sched != curr_sched or prev_str != curr_str:
+            if _differs(prev_sched, curr_sched, _norm_schedule) or _differs(prev_str, curr_str, _norm_strength):
                 label = concept.label_en
                 derived.append(DerivedFact(
                     fact_id=f"D:medchange:{slug(label)}:{prev.date}_{curr.date}",

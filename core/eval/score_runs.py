@@ -108,13 +108,38 @@ C = {
  "23.1": lambda t, L: has(t, "mammograph") and has(t, "april 2016", "2016-04", "3 apr", "03.04"),
  "23.2": lambda t, L: has(t, "family"),
  "23.3": lambda t, L: has(t, "13 apr", "2016-04-13", "13.04"),
+ "24.1": lambda t, L: has(t, "60%") and side_left(L),
+ "24.2": lambda t, L: has(t, "amaurosis", "vision loss", "visual loss", "loss of vision"),
+ "24.3": lambda t, L: has(t, "duplex") and has(t, *NOREC, "open"),
+ "25.1": lambda t, L: has(t, "185/110"),
+ "25.2": lambda t, L: has(t, "nitro"),
+ "25.3": lambda t, L: has(t, "candesartan", "blopress") and has(t, "16 mg"),
+ "26.1": lambda t, L: has(t, "mmse") and has(t, "30/30"),
+ "26.2": lambda t, L: has(t, "78 kg") and has(t, "66 kg"),
+ "26.3": lambda t, L: has(t, "alendron") and has(t, "colecalciferol", "vitamin d", "oleovit"),
+ "27.1": lambda t, L: has(t, "g2") and has(t, "t2 n0 m0"),
+ "27.2": lambda t, L: has(t, "ki-67", "ki67") and has(t, "20%"),
+ "27.3": lambda t, L: has(t, "core") and has(t, "biops"),
+ "28.1": lambda t, L: has(t, "cholesterol", "lipid"),
+ "28.2": lambda t, L: has(t, "simvastatin", "zocor") and has(t, "20 mg"),
+ "28.3": lambda t, L: nd(L, "ldl", "cholesterol", "lipid") or any(has(l.lower(), "ldl", "lipid value", "cholesterol value") and has(l.lower(), *NOREC, "no ", "not ") for l in L),
+ "29.1": lambda t, L: has(t, "60%") and has(t, "36 mm"),
+ "29.2": lambda t, L: has(t, "tapse") and has(t, "25 mm"),
+ "29.3": lambda t, L: has(t, "22 mmhg", "pulmonary hypertension"),
+ "30.1": lambda t, L: has(t, "cholecystectomy"),
+ "30.2": lambda t, L: has(t, "hiatus hernia"),
+ "30.3": lambda t, L: has(t, "aspirin", "acetylsalicylic", "thrombo ass") and not has(t, "apixaban", "rivaroxaban", "edoxaban", "dabigatran", "warfarin", "phenprocoumon", "clopidogrel"),
+ "31.1": lambda t, L: has(t, "2015-06-10", "10 jun", "10.06") and has(t, "2015-06-14", "14 jun", "14.06"),
+ "31.2": lambda t, L: has(t, "hypertensive crisis"),
+ "31.3": lambda t, L: has(t, "2016-04-10", "10 apr", "10.04"),
 }
 
 SHORT = {"1": "Anaesthesia pre-op", "2": "Surgery planning", "3": "GP diabetes", "4": "Emergency at night", "5": "Open follow-ups",
          "6": "Oncologist", "7": "Ophthalmologist", "8": "Ward nurse", "9": "Pharmacist", "10": "Radiologist (contrast CT)",
          "11": "Cardiologist", "12": "Neurologist", "13": "Diabetologist", "14": "Rheumatologist", "15": "Gastroenterologist",
          "16": "Dentist", "17": "Radiation oncologist", "18": "Sleep physician", "19": "GP blood pressure",
-         "20": "Discharge coordinator", "21": "Anaesthetist day of surgery", "22": "Clinical coder", "23": "GP cancer history"}
+         "20": "Discharge coordinator", "21": "Anaesthetist day of surgery", "22": "Clinical coder", "23": "GP cancer history",
+         "24": "Vascular surgeon", "25": "Emergency high BP", "26": "Geriatrician", "27": "Pathologist", "28": "Lipid clinic", "29": "Echo comparison", "30": "Surgical history", "31": "Admissions office"}
 
 
 def score(path):
@@ -123,9 +148,21 @@ def score(path):
     blocks = {parts[i]: items(parts[i + 1]) for i in range(1, len(parts), 2)}
     res = {}
     for qid, fn in C.items():
-        L = blocks.get(qid.split(".")[0], [])
+        L = [_normalize(line) for line in blocks.get(qid.split(".")[0], [])]
         res[qid] = bool(fn("\n".join(L).lower(), L))
     return res
+
+
+def _normalize(line):
+    """Spelling only: "100mg" = "100 mg", "1-0-0-0" (four-slot schedule) = "1-0-0",
+    "Allred score 8" = "Allred 8", US = UK spelling."""
+    line = re.sub(r"(\d)\s*(mg|mcg|µg|ug|kg|ml|mmhg)\b", r"\1 \2", line, flags=re.I)
+    line = re.sub(r"allred score:?\s*", "Allred ", line, flags=re.I)
+    line = re.sub(r"\bnon-?contrast\b", "without contrast", line, flags=re.I)
+    for us, uk in (("estrogen", "oestrogen"), ("tumor", "tumour"), ("apnea", "apnoea"), ("esophag", "oesophag"),
+                   ("hiatal hernia", "hiatus hernia"), ("hemorrh", "haemorrh")):
+        line = re.sub(rf"\b{us}", uk, line, flags=re.I)
+    return re.sub(r"\b(\d(?:/\d)?-\d(?:/\d)?-\d(?:/\d)?)-0\b", r"\1", line)
 
 
 

@@ -248,6 +248,29 @@ To highlight a source: `text.slice(source.start, source.end)` is the cited passa
 `passage_id` in `passages`). `copy_of` names the passage a sentence was copied from in an
 earlier letter. Single passage: `GET /api/passages/<passage_id>` on the core.
 
+### The original file (as delivered)
+
+The text above is normalized (HTML entities decoded, `<BR>` as line breaks). To show the
+letter exactly as delivered:
+
+| Call | Returns |
+|---|---|
+| `GET /api/documents/<doc_id>/original` | `{doc_id, file, metadata, text}` – `text` is the original HTML (`<BR>`, `&uuml;` …), `metadata` the original header (title, date, department, admission …) |
+| `GET /api/passages/<passage_id>/original` | the same plus `raw_start`, `raw_end`, `raw_quote` (= `text.slice(raw_start, raw_end)`) and `quote` (the normalized passage) |
+| `GET /api/documents/<doc_id>/original/file` (core only) | the original JSON file, unchanged |
+
+```jsonc
+// GET /api/passages/12340018:p054/original
+{"doc_id": "12340018", "file": "data/patient-0000-0001/documents/12340018.json",
+ "metadata": {"id": "12340018", "title": "Stat. Patientenbrief (Interne)", "date": "2016-04-15", …},
+ "text": "ORTXXX, am 15.04.2016<BR><BR>Frau<BR>…",
+ "passage_id": "12340018:p054", "raw_start": 2772, "raw_end": 2805,
+ "raw_quote": "Thrombo ASS 100mg oral 1 0 0 0 ST", "quote": "Thrombo ASS 100mg oral 1 0 0 0 ST"}
+```
+
+To highlight in the original: render `text` as HTML and wrap `text.slice(raw_start, raw_end)`.
+Checked for all 349 passages of the patient: every raw span normalizes back to its passage.
+
 ## 7. Chat
 
 ```

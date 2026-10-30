@@ -21,9 +21,10 @@ from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from app import originals
 from app.config import settings
 from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
@@ -227,6 +228,53 @@ async def get_passage(passage_id: str) -> dict[str, Any]:
     if p is None:
         raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
     return p.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Original source files (as delivered, HTML with <BR>) and where a passage sits in them
+# ---------------------------------------------------------------------------
+
+@app.get("/api/documents/{doc_id}/original")
+async def get_original_document(doc_id: str) -> dict[str, Any]:
+    """The original file: {doc_id, file, metadata, text} – text as delivered (HTML)."""
+    original = originals.load_original(doc_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail=f"No original file for document '{doc_id}'")
+    return original
+
+
+@app.get("/api/documents/{doc_id}/original/file")
+async def get_original_file(doc_id: str) -> FileResponse:
+    """The original JSON file itself, unchanged."""
+    path = originals.original_file(doc_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"No original file for document '{doc_id}'")
+    return FileResponse(path, media_type="application/json", filename=path.name)
+
+
+@app.get("/api/passages/{passage_id}/original")
+async def get_passage_original(passage_id: str) -> dict[str, Any]:
+    """
+    The original file of a passage and the passage's position in its raw text:
+    text[raw_start:raw_end] is the passage as delivered (with <BR>, entities).
+    """
+    p = get_store().get_passage(passage_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
+    original = originals.load_original(p.doc_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail=f"No original file for document '{p.doc_id}'")
+    span = originals.raw_span(original["text"], p.start, p.end)
+    if span is None:
+        raise HTTPException(status_code=500, detail="Passage offsets do not fit the original text")
+    return {
+        **original,
+        "passage_id": passage_id,
+        "raw_start": span[0],
+        "raw_end": span[1],
+        "raw_quote": original["text"][span[0]:span[1]],
+        "quote": p.text,
+    }
 
 
 @app.get("/api/contradictions")

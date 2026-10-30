@@ -85,21 +85,36 @@ class Catalogue:
     (c12, f40, d3). Full IDs such as "F:12340018:med:01" cost many output tokens each.
     """
 
+    # Facts shown under each concept, newest first. The concept handle pulls all of them;
+    # older ones only matter one by one in rare cases, and a long list invites wrong picks.
+    FACTS_PER_CONCEPT = 4
+
     def __init__(self, store: FactStore) -> None:
         self.handles: dict[str, str] = {}   # handle → concept_id / fact_id
-        concept_handle: dict[str, str] = {}
-        lines = ["### Concepts (handle | type | label | facts)"]
-        for i, c in enumerate(sorted(store.concepts.values(), key=lambda c: c.concept_id), 1):
-            concept_handle[c.concept_id] = self._add(f"c{i}", c.concept_id)
-            lines.append(f"c{i} | {c.type} | {c.label_en} | {len(c.fact_ids)}")
-        lines += ["", "### Facts (handle | concept | description | status | laterality | date)"]
-        facts = sorted(store.facts.values(), key=lambda f: (f.date or "", f.fact_id))
-        for i, f in enumerate(facts, 1):
-            self._add(f"f{i}", f.fact_id)
-            lines.append(" | ".join([
-                f"f{i}", concept_handle.get(f.concept_id or "", "-"), f.en or f.span,
-                f.status, f.laterality or "-", f.date or "-",
-            ]))
+        facts = sorted((f for f in store.facts.values() if not is_question(f)), key=lambda f: (f.date or "", f.fact_id))
+        fact_handle = {f.fact_id: self._add(f"f{i}", f.fact_id) for i, f in enumerate(facts, 1)}
+        by_concept: dict[str, list] = {}
+        for f in facts:
+            by_concept.setdefault(f.concept_id or "", []).append(f)
+
+        def fact_line(f) -> str:
+            return "  " + " | ".join([fact_handle[f.fact_id], f.en or f.span, f.status, f.laterality or "-", f.date or "-"])
+
+        lines = ["### Concepts with their facts",
+                 "c-handle | type | label | number of facts",
+                 "  f-handle | description | status | laterality | date   (newest first)"]
+        for i, c in enumerate(sorted(store.concepts.values(), key=lambda c: (c.type, c.concept_id)), 1):
+            self._add(f"c{i}", c.concept_id)
+            cfacts = by_concept.pop(c.concept_id, [])[::-1]
+            lines.append(f"c{i} | {c.type} | {c.label_en} | {len(cfacts)}")
+            seen: set[str] = set()   # the same statement in several letters: list the newest once
+            shown = [f for f in cfacts if not ((f.en or f.span).strip(" .").lower() in seen or seen.add((f.en or f.span).strip(" .").lower()))]
+            lines += [fact_line(f) for f in shown[:self.FACTS_PER_CONCEPT]]
+            if len(shown) > self.FACTS_PER_CONCEPT:
+                lines.append(f"  (+{len(shown) - self.FACTS_PER_CONCEPT} older, included when the concept is chosen with scope all)")
+        orphans = [f for fs in by_concept.values() for f in fs]
+        if orphans:
+            lines += ["", "### Facts without a concept"] + [fact_line(f) for f in orphans[::-1]]
         lines += ["", "### Derived facts (handle | description | date)"]
         for i, d in enumerate(sorted(store.derived.values(), key=lambda d: d.fact_id), 1):
             self._add(f"d{i}", d.fact_id)
@@ -214,6 +229,21 @@ def _known_on(f: Fact | DerivedFact, store: FactStore) -> str:
     return (doc.date if doc and doc.date else None) or f.date or ""
 
 
+_QUESTION = re.compile(r"^\s*(clinical\s+)?question\s*:", re.I)
+_LONG_TERM = re.compile(r"lz-?ekg|holter|langzeit|24\s*-?\s*h|24-|tages|nacht|day\s*mean|night\s*mean|mittelwert", re.I)
+
+
+def is_question(f) -> bool:
+    """A letter's referral question ("Fragestellung: VHF?") extracted as a suspected finding – not a finding."""
+    return getattr(f, "status", "") == "suspected" and bool(_QUESTION.match(f.en or ""))
+
+
+def _setting(f) -> str:
+    """Long-term recording (Holter, 24-hour BP) or a single measurement."""
+    ctx = f"{f.fields.get('context', '')} {f.fields.get('name', '')}" if f.type == "measurement" else ""
+    return "long_term" if _LONG_TERM.search(ctx) else "spot"
+
+
 def resolve_facts(v: SelectedVariable, store: FactStore, reference_date: str) -> list[Fact | DerivedFact]:
     """
     Pull the facts a variable points at, purely in code:
@@ -231,14 +261,19 @@ def resolve_facts(v: SelectedVariable, store: FactStore, reference_date: str) ->
             picked.setdefault(f.fact_id, f)
 
     for cid in v.concept_ids:
-        facts = [f for f in store.facts_by_concept(cid) if not reference_date or _known_on(f, store) <= reference_date]
+        facts = [f for f in store.facts_by_concept(cid)
+                 if (not reference_date or _known_on(f, store) <= reference_date) and not is_question(f)]
         if not facts:
             if cid not in store.concepts:
                 logger.warning("fastpath: %s cites unknown concept %s – dropped", v.name, cid)
             continue
         if v.time_scope == "latest":
-            newest = max(f.date or "" for f in facts)
-            facts = [f for f in facts if (f.date or "") == newest]
+            # Newest per kind of measurement: a later spot heart rate does not replace the
+            # Holter result, nor an office blood pressure the 24-hour mean
+            newest: dict[str, str] = {}
+            for f in facts:
+                newest[_setting(f)] = max(newest.get(_setting(f), ""), f.date or "")
+            facts = [f for f in facts if (f.date or "") == newest[_setting(f)]]
         for f in facts:
             picked.setdefault(f.fact_id, f)
 

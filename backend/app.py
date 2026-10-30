@@ -119,6 +119,18 @@ def stream_session_screen(session_id):
     return Response(stream_with_context(relay()), mimetype="text/event-stream")
 
 
+@app.get("/api/documents/<doc_id>/original")
+def get_original_document(doc_id):
+    """The letter as delivered: {doc_id, file, metadata, text} – text is the original HTML."""
+    return jsonify(_core("GET", f"/api/documents/{doc_id}/original"))
+
+
+@app.get("/api/passages/<passage_id>/original")
+def get_passage_original(passage_id):
+    """Original letter of a passage plus raw_start / raw_end: text[raw_start:raw_end] is the passage."""
+    return jsonify(_core("GET", f"/api/passages/{passage_id}/original"))
+
+
 @app.get("/api/documents/<doc_id>")
 def get_document(doc_id):
     """Normalized document text + passages with offsets, for highlighting a source."""

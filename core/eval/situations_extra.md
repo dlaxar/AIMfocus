@@ -146,3 +146,67 @@ You are her GP. She asks how her breast cancer was found.
 1. How and when was the lesion found?
 2. Is a family history of cancer documented?
 3. When was the histology confirmed?
+
+## 24. Vascular surgeon – carotid stenosis
+
+You are the vascular surgeon asked whether her carotid stenosis needs treatment.
+
+1. Which side is the carotid stenosis on, and how severe is it?
+2. Which symptoms were attributed to it?
+3. Is a follow-up duplex ultrasound after June 2015 documented?
+
+## 25. Emergency physician – very high blood pressure
+
+You are the emergency physician called because her blood pressure is very high.
+
+1. What was the highest documented blood pressure?
+2. What was given for it then?
+3. Which antihypertensive does she take now, at what dose?
+
+## 26. Geriatrician – assessment before cancer treatment
+
+You are the geriatrician assessing her before the cancer treatment.
+
+1. Is a cognitive test documented, with what result?
+2. How has her weight changed?
+3. How is her osteoporosis treated?
+
+## 27. Pathologist – tumour board preparation
+
+You are the pathologist preparing her case for the tumour board.
+
+1. What are the tumour grade and TNM stage?
+2. What is the Ki-67 index?
+3. How was the tissue obtained?
+
+## 28. Lipid clinic – cholesterol treatment
+
+You are the doctor in the lipid clinic reviewing her cholesterol treatment.
+
+1. Which lipid disorder is documented?
+2. Which statin does she take, at what dose?
+3. Is an LDL cholesterol value documented?
+
+## 29. Cardiac sonographer – echo comparison
+
+You are the cardiac sonographer comparing a new echocardiogram with the earlier one.
+
+1. What were the LVEF and the left atrial size?
+2. How was right ventricular function?
+3. Was there pulmonary hypertension?
+
+## 30. Surgeon – surgical history before the quadrantectomy
+
+You are the surgeon taking her surgical history before the quadrantectomy.
+
+1. Which earlier operations are documented?
+2. Is a hiatus hernia documented?
+3. Which blood thinner does she take?
+
+## 31. Admissions office – hospital stays
+
+You are in the admissions office checking her earlier hospital stays.
+
+1. When was the June 2015 stay?
+2. Why was she admitted in June 2015?
+3. When was she admitted in April 2016?

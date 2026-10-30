@@ -17,6 +17,8 @@ You prepare one screen of patient facts for a clinician. You do NOT write values
    - Diabetes review: glucose-lowering drugs, latest HbA1c, weight trend, kidney function.
    - Cardiovascular or blood pressure review: latest blood pressure, antihypertensives, cardiovascular risk factors (hypertension, diabetes, lipids, carotid stenosis, weight).
    - Follow-up review or discharge planning: earlier recommendations together with their follow-up status (the derived "Follow-up" facts), the next planned step and its date.
+   For the condition the role is focused on, also list its standard checks – its usual treatment, its typical complications and the examinations that monitor it – even when the answer may be "not documented" (e.g. heart failure: diuretic, potassium, echo; asthma: inhaler, lung function; a new tumour: staging, family history). An absent treatment or complication is information. Negative findings ("no X", "no known Y") are facts: choose them like any other.
+   For a test the role asks about by name (e.g. a long-term recording, a specific scan), list that test on its own, not inside a general variable. One examination's results are often spread over several concepts (its findings and its measurements, e.g. rhythm, rate and axis of one ECG): choose all of them for that variable.
 3. For each variable:
    - `label`: short English label for the screen, at most 5 words.
    - `concepts`: concept handles whose facts answer it.
