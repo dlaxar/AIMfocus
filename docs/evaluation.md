@@ -5,18 +5,33 @@ The summary is in the [README](../README.md#results).
 
 ## Results on the 5 challenge situations (2026-10-30)
 
-`python -m eval.run_eval --v2 --extra` with Claude Haiku 5.5, two runs; answers scored by
-`eval/score_runs.py` against the challenge's `cases/expected.json`. Load time runs from
-`POST /api/v2/screens` until the screen is complete (`status: "complete"`: documented cards and
-text search done). The Opus upgrade streams in afterwards (7–12 s) and is not part of this time.
+![Results slide](eval-results.png)
+
+Every screen is built twice in parallel: Claude Haiku 5.5 (no thinking) answers first, Claude
+Opus 5.5 (effort low) replaces it with a more thorough screen when it is done. Accuracy is
+measured on the screen after the Opus upgrade, speed on the Haiku screen.
+
+`python -m eval.run_eval --v2 --extra`, once waiting for the Haiku screen and once for the
+upgraded one (`GET /api/v2/screens/<id>?wait=true&final=true`); answers scored by
+`eval/score_runs.py` against the challenge's `cases/expected.json`.
 
 | Metric | Result | Target |
 |---|---|---|
-| Correct answers | 15 of 15 (both runs) | 15 of 15 |
-| Traceability | 100% of linked sources (211/211 and 234/234) | 100% |
-| Invented facts | 0 shown; the validator held back 1 item per run as "check" | 0 |
+| Correct answers | 15 of 15 (Haiku screen and upgraded screen) | 15 of 15 |
+| Traceability | 100% of linked sources (278/278 upgraded, 315/315 Haiku) | 100% |
+| Invented facts | 0: no item dropped or marked "check" by the validator on the 5 screens | 0 |
 | Contradictions | 8 shown, all checked by hand against the letters, no false alarms | 5 or more |
-| Load time, slowest of the 5 | 5.2 s and 5.0 s | under 10 s |
+| First response after picking the patient | 1.8 s slowest, median 117 ms (in the app) | under 10 s |
+
+The 8 contradictions are shown on every screen: those that affect a value on the screen are
+marked on that value (5 on the challenge screens) and the others are listed below the screen
+("other contradictions in the record", `other_contradictions` in the API). `run_eval` counts
+only the marked ones (`contradictions`), so it reports 5.
+
+The first response is measured in the real frontend with a headless browser (Playwright,
+Chromium): type the situation and press Enter, pick Anna Musterfrau on the patient page, click
+Next 4 s after submitting, and time from that click until the first cards are visible on the
+dashboard (5 situations × 2 runs).
 
 ### The 8 contradictions
 
@@ -48,10 +63,15 @@ expected answers and source letters, are collected for clinical review in
 
 | Set | Result |
 |---|---|
-| All 31 situations (93 questions), fast screen | 88–90 of 93 correct; mean load time 4.5 s, slowest 7.2 s |
-| Team's 72 additional questions (`run_additional`, Opus 5.5 as judge) – chat | 66 of 72 |
-| Same – screen, fast model | 42–43 of 72 |
-| Same – screen after the Opus upgrade | 51–52 of 72 |
+| All 31 situations (93 questions), Haiku screen | 90 of 93 correct |
+| Same – screen after the Opus upgrade | 91 of 93 correct |
+| Only the 26 team situations (78 questions), after the Opus upgrade | 76 of 78 |
+| Team's 72 additional questions (`run_additional`, Opus 5.5 as judge) – chat | 63 of 72 |
+| Same – screen, Haiku | 46 of 72 |
+| Same – screen after the Opus upgrade | 49 of 72 |
+
+Earlier runs on the same day: 88–90 of 93 (Haiku screen); on the 72 additional questions chat
+66, Haiku screen 42–43, upgraded screen 51–52. The differences are within run-to-run variation.
 
 The screen is built from the situation alone and never sees the question, so details outside
 what the role needs are often left to the chat, which answers the question itself.
@@ -85,7 +105,7 @@ records:
 - **Traceability:** for every source on the screen, the passage at `start:end` must contain the
   quoted text.
 - **Invented facts:** items the validator dropped or marked "check" (the hallucination monitor).
-- **Contradictions:** unique across all screens.
+- **Contradictions:** unique across all screens (only those marked on a value; see above).
 - Optionally (`--judge`) an LLM checks each question against the screen.
 
 Without `--v2`, `run_eval` uses the earlier runtime (`POST /api/screen`, planner + answerer),
@@ -99,3 +119,4 @@ kept for comparison.
 | `core/eval/situations_extra.md`, `expected_extra.json` | 26 team situations and expected answers |
 | `core/eval/AIMfocus_test_questions_additional.csv` | 72 additional team questions |
 | `core/eval/test-questions.md` / `.csv` | All situations and questions for clinical review |
+| `docs/eval-results.html` / `.png` | Results slide; render command in the HTML |

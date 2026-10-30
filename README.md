@@ -114,26 +114,29 @@ the fast one a few seconds later); offline fact extraction uses Gemini by defaul
 
 ## Results
 
-Measured on the challenge's 5 situations(details and method:
-[Evaluation](docs/evaluation.md)).
+Measured on the challenge's 5 situations (details and method:
+[Evaluation](docs/evaluation.md)). Accuracy on the screen after the Opus upgrade, speed on
+the Haiku screen.
+
+![Results on the 5 challenge situations](docs/eval-results.png)
 
 | Metric | Result | Target |
 |---|---|---|
-| Correct answers | **15 of 15** (both runs) | 15 of 15 |
-| Traceability | **100%** of linked sources (211/211 and 234/234) | 100% |
-| Invented facts | **0** shown; the validator held back 1 item per run as "check" | 0 |
+| Correct answers | **15 of 15** | 15 of 15 |
+| Traceability | **100%** of linked sources (278/278) | 100% |
+| Invented facts | **0** – nothing dropped or marked "check" by the validator | 0 |
 | Contradictions | **8** real ones, no false alarms (checked by hand) | 5 or more |
-| Load time, first answer | **1.8 s** | under 10 s |
+| First response after picking the patient | **1.8 s** slowest, median 117 ms (in the app) | under 10 s |
 
 To prepare for the jury's new situations we wrote 26 more (pharmacist, ward nurse, dentist,
-radiologist, clinical coder, …): 88–90 of all 93 questions answered on the screen, mean load
-time 4.5 s, slowest 7.2 s.
+radiologist, clinical coder, …): 76 of their 78 questions answered on the screen after the
+Opus upgrade, 90–91 of all 93.
 
 ## What works and what doesn't (yet)
 
 - ✅ End to end on the 5 challenge situations and on new roles and tasks for the same patient
 - ✅ Every fact on screen is sourced; nothing unverified is shown as fact
-- ⚠️ The Opus screen replaces the fast one after 7–12 s, so cards can still change while you read
+- ⚠️ The Opus screen replaces the fast one after about 8–15 s, so cards can still change while you read
 - ⚠️ A role-specific screen does not show every detail; specific questions outside the role's
   needs are answered by the chat
 - ⚠️ Prototype limits: sessions live in memory in one process; a new letter means re-running the
