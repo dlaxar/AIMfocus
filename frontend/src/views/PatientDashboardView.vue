@@ -187,7 +187,7 @@ const screen = ref(null)
 const error  = ref('')
 let stop = null
 
-const TIER_LABEL = { critical: 'Critical', important: 'Important', background: 'Background' }
+const TIER_LABEL = { critical: 'Important', important: 'Additional', background: 'Background' }
 const TIER_HINT = {
   critical: 'check before acting',
   important: 'for this task',

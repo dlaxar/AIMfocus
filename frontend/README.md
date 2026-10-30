@@ -26,8 +26,8 @@ npm run build      # production bundle in dist/
 
 ## Result screen (`src/components/screen/`)
 
-`layout.js` turns the screen's cards into a reading order: tiers top to bottom (**Critical** –
-check before acting, **Important** – for this task, **Background** – context, collapsed to one
+`layout.js` turns the screen's cards into a reading order: tiers top to bottom (**Important** –
+check before acting, **Additional** – for this task, **Background** – context, collapsed to one
 line per card), and inside a tier one block per kind:
 
 | Component | Shows |
