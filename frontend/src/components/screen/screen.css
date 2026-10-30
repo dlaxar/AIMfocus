@@ -1,0 +1,177 @@
+/* Shared look of the screen's blocks (tables, lists, trends). Not scoped: used by several components. */
+.screen-body {
+  --row-line: #eceef1;
+  --cx: #ce2c31;
+  --cx-bg: #fff6f5;
+}
+
+.var-label {
+  font-weight: 600;
+}
+
+.fact-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.fact-table th,
+.fact-table td {
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--row-line);
+}
+.fact-table tbody:last-child tr:last-child > * {
+  border-bottom: none;
+}
+.fact-table thead th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 0;
+}
+.fact-table .group-row th {
+  padding-top: 10px;
+  font-size: 0.8rem;
+  border-bottom-color: var(--border);
+}
+.fact-table .group-row th > * {
+  vertical-align: middle;
+}
+.value-table .col-label {
+  width: 34%;
+}
+.value-table .label-cell {
+  font-weight: normal;
+  color: var(--text);
+}
+.value-table .label-cell .var-label {
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+.fact-table .col-date {
+  width: 7.5em;
+}
+.fact-table .col-icons {
+  width: 64px;
+}
+.fact-table tr.older td {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.date-cell {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fact-table td.date-cell {
+  padding-top: 7px;
+}
+.icon-cell {
+  white-space: nowrap;
+  text-align: right !important;
+}
+.fact-table td.icon-cell {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.icon-cell > * {
+  vertical-align: middle;
+}
+
+/* A value some letter contradicts */
+.has-cx > td:first-of-type,
+li.has-cx {
+  box-shadow: inset 3px 0 0 var(--cx);
+}
+.fact-table tr.has-cx > td,
+li.has-cx {
+  background: var(--cx-bg);
+}
+
+.missing {
+  color: var(--muted);
+  font-style: italic;
+}
+.history-toggle {
+  display: block;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+.history-toggle:hover {
+  text-decoration: underline;
+}
+
+.skeleton {
+  display: inline-block;
+  width: 60%;
+  height: 0.8em;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eceef1 25%, #f6f7f9 50%, #eceef1 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.2s ease-in-out infinite;
+}
+@keyframes skeleton {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Wide tables scroll inside their block instead of widening the page */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Phone: the value table stacks label above value | date | icons */
+@media (max-width: 600px) {
+  .value-table,
+  .value-table tbody {
+    display: block;
+  }
+  .value-table colgroup {
+    display: none;
+  }
+  .value-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: start;
+    border-bottom: 1px solid var(--row-line);
+  }
+  .value-table tr > * {
+    border-bottom: none;
+  }
+  .value-table .label-cell {
+    grid-column: 1 / -1;
+    padding-bottom: 0;
+  }
+  .value-table .history-toggle {
+    display: inline;
+    margin-left: 8px;
+  }
+  .fact-list li {
+    padding-left: 12px;
+    gap: 6px;
+  }
+}

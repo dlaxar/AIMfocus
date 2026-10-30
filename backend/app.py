@@ -170,6 +170,63 @@ def get_document(doc_id):
     return jsonify(_core("GET", f"/api/documents/{doc_id}"))
 
 
+@app.get("/api/passages/<passage_id>")
+def get_passage(passage_id):
+    """A single passage with its offsets into the document text."""
+    return jsonify(_core("GET", f"/api/passages/{passage_id}"))
+
+
+def _section_bounds(passages, idx):
+    """Index range [lo, hi] of the section around passages[idx].
+
+    The core labels a section's header passage with the *previous* section's name, so a
+    section is the run of non-header passages sharing a name, plus the header just before it.
+    """
+    name = passages[idx]["section"]
+    if passages[idx]["kind"] == "header":
+        # A header opens the following section
+        if idx + 1 < len(passages) and passages[idx + 1]["kind"] != "header":
+            idx += 1
+            name = passages[idx]["section"]
+        else:
+            return idx, idx
+    lo = hi = idx
+    while lo > 0 and passages[lo - 1]["section"] == name and passages[lo - 1]["kind"] != "header":
+        lo -= 1
+    while hi + 1 < len(passages) and passages[hi + 1]["section"] == name and passages[hi + 1]["kind"] != "header":
+        hi += 1
+    if lo > 0 and passages[lo - 1]["kind"] == "header":
+        lo -= 1
+    return lo, hi
+
+
+@app.get("/api/passages/<passage_id>/context")
+def get_passage_context(passage_id):
+    """
+    A passage inside its document section, for showing a source without the whole letter:
+    {doc: {doc_id, title, date, type, department}, passage, section: {name, start, end, text}}.
+    Offsets are into the full document text, so the caller can highlight passage
+    start/end inside the section and later open the full document at the same place.
+    """
+    passage = _core("GET", f"/api/passages/{passage_id}")
+    doc = _core("GET", f"/api/documents/{passage['doc_id']}")
+    passages = doc.pop("passages")
+    text = doc.pop("text")
+    idx = next((i for i, p in enumerate(passages) if p["passage_id"] == passage_id), None)
+    if idx is None:
+        lo_start, hi_end, name = passage["start"], passage["end"], passage.get("section")
+    else:
+        lo, hi = _section_bounds(passages, idx)
+        lo_start, hi_end = passages[lo]["start"], passages[hi]["end"]
+        name = passages[hi]["section"]
+    lo_start, hi_end = min(lo_start, passage["start"]), max(hi_end, passage["end"])
+    return jsonify(
+        doc={k: doc.get(k) for k in ("doc_id", "title", "date", "type", "department")},
+        passage=passage,
+        section={"name": name, "start": lo_start, "end": hi_end, "text": text[lo_start:hi_end]},
+    )
+
+
 @app.get("/api/patients/search")
 def search_patients():
     """Return patients whose name or ID contains the query string (case-insensitive).
