@@ -16,7 +16,7 @@
         <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" fill="currentColor"/>
         <path d="M12 9v4M12 17h.01" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
       </svg>
-      <span v-if="items.length > 1" class="count">{{ items.length }}</span>
+      <span v-if="items.length > 1 && !hideCount" class="count">{{ items.length }}</span>
     </button>
     <Popover
       :open="pinned || hovering"
@@ -60,6 +60,8 @@ const props = defineProps({
   ids: { type: Array, default: () => [] },
   // ContradictionRef objects from a variable, used when the screen-level list lacks an ID
   refs: { type: Array, default: () => [] },
+  // Icon only, where the count is already spelled out next to it
+  hideCount: { type: Boolean, default: false },
 })
 
 const index = inject('contradictionIndex', null)

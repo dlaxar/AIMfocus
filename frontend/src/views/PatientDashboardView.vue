@@ -39,7 +39,7 @@
         </div>
 
         <p v-if="screen?.contradictions?.length" class="cx-banner">
-          <ContradictionBadge :ids="screen.contradictions.map((c) => c.contradiction_id)" />
+          <ContradictionBadge :ids="screen.contradictions.map((c) => c.contradiction_id)" hide-count />
           {{ screen.contradictions.length }} contradiction{{ screen.contradictions.length > 1 ? 's' : '' }}
           between the letters affect{{ screen.contradictions.length > 1 ? '' : 's' }} this screen; the values involved are marked.
         </p>
