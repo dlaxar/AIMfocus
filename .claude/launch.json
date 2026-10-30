@@ -13,15 +13,6 @@
       "port": 5173
     },
     {
-      "name": "backend",
-      "runtimeExecutable": "backend/.venv/bin/python",
-      "runtimeArgs": [
-        "backend/app.py"
-      ],
-      "port": 8000,
-      "autoPort": false
-    },
-    {
       "name": "core",
       "runtimeExecutable": "core/.venv/bin/python",
       "runtimeArgs": [

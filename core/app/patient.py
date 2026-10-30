@@ -1,10 +1,13 @@
 """
 app/patient.py – the patient header the frontend always shows: who she is, CAVE, current
 body measurements, latest stay, and what the record holds. Built in code, no LLM.
+Also the patient search over every data/*/patient.json.
 """
 from __future__ import annotations
 
 import json
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Optional
 
 from app.config import settings
@@ -18,6 +21,25 @@ def patient_json(patient_id: str) -> dict:
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
     return {}
+
+
+@lru_cache(maxsize=4)
+def _all_patients(data_dir: Path) -> tuple[dict, ...]:
+    patients = []
+    for path in sorted(data_dir.glob("*/patient.json")):
+        info = json.loads(path.read_text(encoding="utf-8"))
+        info.pop("ward", None)
+        patients.append(info)
+    return tuple(patients)
+
+
+def search_patients(q: str, limit: int = 10) -> list[dict]:
+    """Patients whose name or ID contains q (case-insensitive), from every patient.json in DATA_DIR."""
+    q = q.strip().lower()
+    if not q:
+        return []
+    return [p for p in _all_patients(settings.DATA_DIR)
+            if q in str(p.get("name", "")).lower() or q in str(p.get("id", "")).lower()][:limit]
 
 
 def _age(birth: Optional[str], on: Optional[str]) -> Optional[int]:

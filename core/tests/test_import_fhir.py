@@ -144,7 +144,7 @@ class TestImages:
     def test_image_list_carries_the_links(self, client):
         [img] = client.get(f"/api/v2/patients/{PID}/images").json()
         assert img["image_id"] == UID and img["frames"] == 8 and img["title"].startswith("MRI of the head")
-        assert img["preview_url"] == f"/api/patients/{PID}/images/{UID}/preview.png"   # gateway path
+        assert img["preview_url"] == f"/api/v2/patients/{PID}/images/{UID}/preview.png"
 
     def test_preview_slice_and_dicom(self, client):
         base = f"/api/v2/patients/{PID}/images/{UID}"

@@ -88,7 +88,7 @@ def image_ref(fact, store):
     info = getattr(store, "images", {}).get(image_id or "")
     if not info:
         return None
-    base = f"/api/patients/{store.patient_id}/images/{image_id}"
+    base = f"/api/v2/patients/{store.patient_id}/images/{image_id}"
     return ImageRef(image_id=image_id, modality=info.get("modality"), body_site=info.get("body_site"),
                     date=info.get("date"), frames=info.get("frames"), preview_url=f"{base}/preview.png",
                     slice_url=f"{base}/slice.png", dicom_url=f"{base}/dicom")

@@ -1,4 +1,4 @@
-# Clinical Documentation Screen — Backend
+# Clinical Documentation Screen — Core
 
 Team **Oachkatzlschwoaf** · IBM AIM Hackathon · Track 1
 
@@ -7,7 +7,7 @@ Team **Oachkatzlschwoaf** · IBM AIM Hackathon · Track 1
 ## Overview
 
 A clinician types a **role + task** in free text (e.g. *"Anaesthetist, pre-op check before quadrantectomy on 16 May 2016"*).
-The backend returns **one screen** with only the patient facts that task needs. Each fact links to the exact sentence or table row it came from. Missing facts are shown as **"not documented"** and relevant **contradictions** are flagged.
+The core returns **one screen** with only the patient facts that task needs. Each fact links to the exact sentence or table row it came from. Missing facts are shown as **"not documented"** and relevant **contradictions** are flagged.
 
 **Core principle: slow and thorough offline, fast and constrained at runtime.**
 
@@ -18,7 +18,7 @@ The backend returns **one screen** with only the patient facts that task needs. 
 ### 1. Install dependencies
 
 ```bash
-cd backend
+cd core
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -54,13 +54,13 @@ python -m preprocess.import_fhir --folder ../data/coherent/Wiley422_Hermiston71
 ```
 
 Patient IDs are `coh-<first 8 characters of the FHIR id>`; `patient.json` goes to
-`$DATA_DIR/patient-<id>/`, so the gateway's patient search finds them.
+`$DATA_DIR/patient-<id>/`, so the patient search (`/api/v2/patients/search`) finds them.
 
 ### 4. Start the API server
 
 ```bash
-uvicorn app.main:app --reload
-# API docs: http://localhost:8000/docs
+uvicorn app.main:app --reload --port 8001
+# API docs: http://localhost:8001/docs
 ```
 
 ### 5. Run tests (no API key needed)
@@ -72,7 +72,7 @@ LLM_FAKE=true pytest tests/ -v
 ### 6. Run evaluation
 
 ```bash
-uvicorn app.main:app &
+uvicorn app.main:app --port 8001 &
 python -m eval.run_eval          # 5 standard situations
 python -m eval.run_eval --extra  # + 5 extra situations
 ```
@@ -82,7 +82,7 @@ python -m eval.run_eval --extra  # + 5 extra situations
 ## Repository layout
 
 ```
-backend/
+core/
   app/
     main.py               FastAPI app, all routes
     config.py             Settings (pydantic-settings, .env)

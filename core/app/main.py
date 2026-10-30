@@ -7,6 +7,9 @@ Routes:
   GET  /api/documents               → list of documents
   GET  /api/documents/{doc_id}      → document text + passages
   GET  /api/passages/{passage_id}   → single passage with offsets
+  GET  /api/passages/{passage_id}/context → passage inside its document section
+  GET  /api/v2/patients/search?q=   → patient search over data/*/patient.json
+  GET  /api/v2/patients/{patient_id} → patient header
   GET  /api/contradictions          → all precomputed contradictions
   GET  /healthz                     → health check
 """
@@ -20,7 +23,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -239,6 +242,61 @@ async def get_passage(passage_id: str, patient_id: Optional[str] = None) -> dict
     return p.model_dump()
 
 
+def _section_bounds(passages: list, idx: int) -> tuple[int, int]:
+    """Index range [lo, hi] of the section around passages[idx].
+
+    S0 labels a section's header passage with the *previous* section's name, so a
+    section is the run of non-header passages sharing a name, plus the header just before it.
+    """
+    name = passages[idx].section
+    if passages[idx].kind == "header":
+        # A header opens the following section
+        if idx + 1 < len(passages) and passages[idx + 1].kind != "header":
+            idx += 1
+            name = passages[idx].section
+        else:
+            return idx, idx
+    lo = hi = idx
+    while lo > 0 and passages[lo - 1].section == name and passages[lo - 1].kind != "header":
+        lo -= 1
+    while hi + 1 < len(passages) and passages[hi + 1].section == name and passages[hi + 1].kind != "header":
+        hi += 1
+    if lo > 0 and passages[lo - 1].kind == "header":
+        lo -= 1
+    return lo, hi
+
+
+@app.get("/api/passages/{passage_id}/context")
+async def get_passage_context(passage_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
+    """
+    A passage inside its document section, for showing a source without the whole letter:
+    {doc: {doc_id, title, date, type, department}, passage, section: {name, start, end, text}}.
+    Offsets are into the full document text, so the caller can highlight passage
+    start/end inside the section and later open the full document at the same place.
+    """
+    store = _store_for(patient_id)
+    p = store.get_passage(passage_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
+    doc = store.get_document(p.doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Document '{p.doc_id}' not found")
+    passages = store.passages_for_doc(p.doc_id)
+    idx = next((i for i, q in enumerate(passages) if q.passage_id == passage_id), None)
+    if idx is None:
+        start, end, name = p.start, p.end, p.section
+    else:
+        lo, hi = _section_bounds(passages, idx)
+        start, end, name = passages[lo].start, passages[hi].end, passages[hi].section
+    start, end = min(start, p.start), max(end, p.end)
+    doc_info = doc.model_dump()
+    return {
+        "doc": {k: doc_info.get(k) for k in ("doc_id", "title", "date", "type", "department")},
+        "passage": p.model_dump(),
+        "section": {"name": name, "start": start, "end": end, "text": doc.text[start:end]},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Original source files (as delivered, HTML with <BR>) and where a passage sits in them
 # ---------------------------------------------------------------------------
@@ -285,6 +343,13 @@ async def get_passage_original(passage_id: str, patient_id: Optional[str] = None
         "raw_quote": original["text"][span[0]:span[1]],
         "quote": p.text,
     }
+
+
+# Declared before /api/v2/patients/{patient_id}, which would otherwise match "search"
+@app.get("/api/v2/patients/search")
+async def search_patients(q: str = "", limit: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
+    """Patients whose name or ID contains q (case-insensitive): {id, name, dateOfBirth, …} per patient."""
+    return patient.search_patients(q, limit)
 
 
 @app.get("/api/v2/patients/{patient_id}")

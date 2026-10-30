@@ -24,7 +24,8 @@ body {
   max-width: 650px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 48px 24px 100px;
+  /* The footer at the bottom keeps content clear of the fixed Next button */
+  padding: 48px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -54,4 +55,36 @@ input:focus {
 
 ::placeholder {
   color: var(--muted);
+}
+
+/* Small round icon button (sources, contradictions) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  transition: color 0.12s, background 0.12s;
+}
+.icon-btn:hover:not(:disabled),
+.icon-btn.active {
+  background: var(--bg);
+  color: var(--accent);
+}
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
