@@ -242,6 +242,9 @@ def run_eval(base_url: str, include_extra: bool, cases_dir: Path, use_judge: boo
             situations.extend(_parse_situations_md(extra_path))
 
     expected = _load_expected(cases_dir)
+    # One event loop for all judge calls: the LLM client keeps HTTP connections bound to the
+    # loop that opened them, so asyncio.run per situation fails with "Event loop is closed"
+    loop = asyncio.new_event_loop()
 
     # Fetch document texts for traceability check
     doc_texts: dict[str, str] = {}
@@ -299,7 +302,7 @@ def run_eval(base_url: str, include_extra: bool, cases_dir: Path, use_judge: boo
         sit_expected = [v for k, v in sorted(expected.items()) if k.startswith(f"{sit_id}.")]
         correct_str = "–"
         if use_judge and sit_expected:
-            result = asyncio.run(judge_screen(items, sit_expected))
+            result = loop.run_until_complete(judge_screen(items, sit_expected))
             by_q = {v.question_id: v for v in result.questions}
             n_ok = 0
             for exp in sit_expected:
