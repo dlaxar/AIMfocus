@@ -200,7 +200,19 @@ are still sent for existing code. New code should use the fields above.
 
 // ContradictionRef – on a variable
 {"contradiction_id": "X:cf:…", "kind": "calculation", "summary_en": "…"}
+
+// Coding – standard code of a fact, in `codes` on every Entry, TableRow and TrendPoint,
+// and as `code` on a trend Series. Never part of `text`, `label` or `headline`.
+{"system": "ATC", "code": "B01AC06", "display": null, "uri": "http://www.whocc.no/atc"}
+{"system": "LOINC", "code": "29463-7", "display": "Body weight", "uri": "http://loinc.org"}
+{"system": "ICD-10", "code": "C50.9", "display": null, "uri": "http://hl7.org/fhir/sid/icd-10"}
 ```
+
+`codes` is empty when no code is known. ICD-10 and ATC come from IBM's extraction (matched to
+our facts and spread over the concept), LOINC from a fixed table of measurements (weight,
+height, BMI, blood pressure with systolic/diastolic, heart rate, HbA1c, LVEF, temperature).
+A concept can carry two codes when IBM coded it twice (e.g. carotid stenosis I65.2 and G45.3).
+Suggested UI: a small badge or tooltip next to the value, not in the card title.
 
 Dates are ISO (`YYYY-MM-DD`); a few facts only know the month (`2016-04`).
 

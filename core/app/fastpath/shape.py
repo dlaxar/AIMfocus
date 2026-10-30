@@ -14,6 +14,7 @@ from typing import Optional
 
 from app.fastpath.models import (
     TABLE_COLUMNS,
+    Coding,
     ContradictionRef,
     Entry,
     Headline,
@@ -48,6 +49,15 @@ def _cx_ids(fact_id: Optional[str], store: FactStore) -> list[str]:
     return [cx.contradiction_id for cx in store.contradictions if fact_id and fact_id in cx.fact_ids]
 
 
+_SYSTEM_NAMES = {"http://hl7.org/fhir/sid/icd-10": "ICD-10", "http://www.whocc.no/atc": "ATC", "http://loinc.org": "LOINC"}
+
+
+def _codes(fact_id: Optional[str], store: FactStore) -> list[Coding]:
+    """Standard codes of a fact (ICD-10, ATC, LOINC) – separate from the screen text."""
+    return [Coding(system=_SYSTEM_NAMES.get(c["system"], c["system"]), code=c["code"], display=c.get("display"), uri=c["system"])
+            for c in getattr(store, "codes", {}).get(fact_id or "", [])]
+
+
 def _entry(f: Fact | DerivedFact, store: FactStore) -> Entry:
     status = f.fields.get("status") if f.type == "derived" else f.status
     if f.type == "derived" and f.formula == "followup_status":
@@ -55,7 +65,7 @@ def _entry(f: Fact | DerivedFact, store: FactStore) -> Entry:
     return Entry(
         fact_id=f.fact_id, text=(f.en or getattr(f, "span", "")).strip().rstrip("."), date=f.date,
         status=status if status not in (None, "unknown") else None,
-        source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store),
+        source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store), codes=_codes(f.fact_id, store),
     )
 
 
@@ -96,6 +106,16 @@ def _numbers(f: Fact) -> list[tuple[str, float]]:
     return []
 
 
+def _series_code(f: Fact, part: str, store: FactStore) -> Optional[Coding]:
+    """LOINC of the series: systolic / diastolic for the two blood pressure series, else the concept's."""
+    from app.fhir.codes import LOINC_DIASTOLIC, LOINC_SYSTOLIC, loinc_coding
+    if part in ("Systolic", "Diastolic"):
+        code, display = LOINC_SYSTOLIC if part == "Systolic" else LOINC_DIASTOLIC
+        return Coding(system="LOINC", code=code, display=display, uri="http://loinc.org")
+    hit = loinc_coding(f.concept_id)
+    return Coding(system="LOINC", code=hit[0]["code"], display=hit[0]["display"], uri="http://loinc.org") if hit else None
+
+
 def _shape_trend(var: ScreenVariable, facts: list, store: FactStore) -> bool:
     series: dict[str, Series] = {}
     seen: set[tuple] = set()
@@ -109,9 +129,9 @@ def _shape_trend(var: ScreenVariable, facts: list, store: FactStore) -> bool:
             if (name, f.date[:10], value) in seen:   # the same reading copied into a later letter
                 continue
             seen.add((name, f.date[:10], value))
-            series.setdefault(name, Series(name=name, unit=str(f.fields.get("unit", "")))).points.append(TrendPoint(
+            series.setdefault(name, Series(name=name, unit=str(f.fields.get("unit", "")), code=_series_code(f, part, store))).points.append(TrendPoint(
                 date=f.date, value=value, label=f.fields.get("context") or f.fields.get("name"), fact_id=f.fact_id,
-                source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store),
+                source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store), codes=_codes(f.fact_id, store),
             ))
     if not series:
         return False
@@ -173,7 +193,7 @@ def _shape_table(var: ScreenVariable, sel: SelectedVariable, facts: list, store:
     columns = (["item"] + [c for c in columns if c != "item"])[:MAX_TABLE_COLUMNS]
     var.table = Table(columns=columns, rows=[
         TableRow(cells={c: _cell(c, f, store, ref) for c in columns}, fact_id=f.fact_id, date=f.date,
-                 source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store))
+                 source=_source(f, store), contradiction_ids=_cx_ids(f.fact_id, store), codes=_codes(f.fact_id, store))
         for f in sorted(rows_facts.values(), key=lambda f: _cell("item", f, store, ref))
     ])
     var.headline = Headline(text=f"{len(var.table.rows)} item(s): " + ", ".join(r.cells["item"] for r in var.table.rows[:3]),

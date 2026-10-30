@@ -31,6 +31,20 @@ def _derived_line(df: DerivedFact) -> str:
     return f"{df.fact_id} | derived | - | {df.en} | - | - | {date_str}"
 
 
+def build_fact_sheet(patient_id: str, facts: list[Fact], derived: list[DerivedFact]) -> str:
+    """One line per fact and derived fact (also rebuilt by FactStore when it reads fhir.json)."""
+    lines = [
+        "# Fact sheet",
+        f"# Patient: {patient_id}",
+        f"# Columns: fact_id | type | concept_id | description | status | laterality | date",
+        "",
+    ]
+    lines += [_fact_line(fact) for fact in facts]
+    lines.append("")
+    lines += [_derived_line(df) for df in derived]
+    return "\n".join(lines)
+
+
 def coverage_pct(reports: list[S1Report]) -> float:
     """Share of passages that have a fact, a no-content flag, or are headers."""
     total = sum(r.total_passages for r in reports)
@@ -61,22 +75,9 @@ def run(cache_dir: Path, patient_id: str) -> CacheManifest:
             for r in json.loads(s1_path.read_text(encoding="utf-8"))
         ]
 
-    # Build fact sheet
-    lines = [
-        "# Fact sheet",
-        f"# Patient: {patient_id}",
-        f"# Columns: fact_id | type | concept_id | description | status | laterality | date",
-        "",
-    ]
-    for fact in facts:
-        lines.append(_fact_line(fact))
-    lines.append("")
-    for df in derived:
-        lines.append(_derived_line(df))
-
-    fact_sheet = "\n".join(lines)
+    fact_sheet = build_fact_sheet(patient_id, facts, derived)
     (out_dir / "fact_sheet.txt").write_text(fact_sheet, encoding="utf-8")
-    logger.info("S4: wrote fact_sheet.txt (%d lines)", len(lines))
+    logger.info("S4: wrote fact_sheet.txt (%d lines)", fact_sheet.count("\n") + 1)
 
     coverage = coverage_pct(reports)
 

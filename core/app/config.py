@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # whole pipeline 1 min 38 s instead of 6 min 57 s, facts within run-to-run variation.
     S1_PARALLEL_DOCS: bool = True
 
+    # Cache the runtime reads: "auto" = cache/<patient>/fhir.json when it exists, else the JSON files;
+    # "fhir" = fhir.json only; "json" = the JSON files only
+    CACHE_FORMAT: str = "auto"
+
     LLM_FAKE: bool = False
     # Fake-mode latency per prompt, to demo async behaviour, e.g. '{"fp_derive": 3000}' (ms)
     FAKE_LLM_DELAYS_MS: dict[str, int] = {}

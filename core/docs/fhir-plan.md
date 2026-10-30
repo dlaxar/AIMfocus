@@ -1,6 +1,32 @@
 # Plan: FHIR R4 as the only store
 
-Status: plan, not implemented. Prototype quality is the goal: valid FHIR R4 outside, nothing lost inside.
+Status: implemented on branch `fhir-store` (steps 1–3, 5–8; step 4 in a lighter form, see below).
+Prototype quality is the goal: valid FHIR R4 outside, nothing lost inside.
+
+## What is implemented
+
+| Step | State |
+|---|---|
+| 1. `app/fhir/` with `load` / `save`, round-trip test | done: `cache.py`, `mapping.py`, `ids.py`, `extensions.py`, `codes.py`; `tests/test_fhir.py` |
+| 2. Converter | done: `python -m preprocess.convert_cache --patient <id>` (and `--to-json` back) |
+| 3. `FactStore` reads `fhir.json` | done: `CACHE_FORMAT=auto` (default: `fhir.json` when present), `fhir`, `json` |
+| 4. Stages on the bundle | lighter: stages still hand over through the JSON files; the pipeline ends with an `=== FHIR bundle ===` step that writes `fhir.json`, and `--from sN` restores the earlier stages' files from `fhir.json` when they are missing (stage tags). The contradiction finder (`contradictions/`) is untouched. |
+| 5. ICD-10 / ATC / LOINC | done: IBM mentions matched to our facts and spread per concept; LOINC table checked on loinc.org |
+| 6. Tests | done: round trip, R4 validation, references, status mapping, codes, store on `fhir.json`, held-back findings |
+| 7. Real ingestion + eval | done, see `Results` |
+| 8. Docs | this file, `core/README.md` |
+
+Deviations from the design below:
+- The JSON stage files stay as the pipeline's working files; the runtime reads only `fhir.json`.
+  A standalone `python -m contradictions` run writes `contradictions.json`: run
+  `python -m preprocess.convert_cache` afterwards to put it into `fhir.json`.
+- Raw S1 facts, S1 report, alias merges and the manifest are `Binary` resources (JSON), since
+  `Bundle` has no extensions. Facts are tagged `s2` (they are the merged S2 output).
+- Held-back findings without a finder ID get `X:report:<key>` as `DetectedIssue.id`.
+
+## Results (patient 0000-0001)
+
+See the "Results" section at the end.
 
 ## Goal
 

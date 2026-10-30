@@ -43,6 +43,17 @@ async def _run_pipeline_async(patient_id: str, from_stage: str, model: str | Non
     data_dir = settings.DATA_DIR
     cache_dir = settings.CACHE_DIR
     start = _stage_index(from_stage)
+    out_dir = cache_dir / patient_id
+
+    # Restart from fhir.json when the stage files are gone: write back what the earlier
+    # stages produced (resources are tagged with the stage that made them)
+    fhir_path = out_dir / "fhir.json"
+    if start > 0 and fhir_path.exists() and not (out_dir / "documents.json").exists():
+        from app import fhir
+        cache = fhir.load(fhir_path)
+        cache.drop_from(STAGES[start])
+        written = fhir.to_json_dir(cache, out_dir)
+        logger.info("Restored %s from fhir.json for --from %s", ", ".join(written), STAGES[start])
 
     if start <= 0:
         logger.info("=== S0: Normalize + split ===")
@@ -73,6 +84,12 @@ async def _run_pipeline_async(patient_id: str, from_stage: str, model: str | Non
             manifest.coverage_pct,
             cache_dir / patient_id / "manifest.json",
         )
+
+    # The runtime reads one file: the whole cache as a validated FHIR R4 Bundle, with
+    # ICD-10 / ATC codes from IBM's extraction and LOINC for measurements
+    logger.info("=== FHIR bundle ===")
+    from preprocess import convert_cache
+    convert_cache.to_fhir(patient_id)
 
 
 def main() -> None:
