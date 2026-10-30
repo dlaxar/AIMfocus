@@ -29,6 +29,11 @@
     <PatientAutocomplete v-model="selectedPatient" @keyup.enter="next" />
   </label>
 
+  <p v-if="stats" class="db-stats">
+    {{ stats.patients }} patients with {{ stats.valid_documents }} validated FHIR documents available ·
+    <router-link to="/stats">Details</router-link>
+  </p>
+
   <p v-if="error" class="error" role="alert">{{ error }}</p>
 
   <Teleport to="body">
@@ -42,7 +47,7 @@ import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
 import PatientAutocomplete from '../components/PatientAutocomplete.vue'
 import { form, session, setSessionSummary } from '../store.js'
-import { getSessionSummary, setSessionPatient } from '../api.js'
+import { getSessionSummary, getStats, setSessionPatient } from '../api.js'
 
 const router = useRouter()
 const selectedPatient = ref(null)
@@ -77,6 +82,16 @@ const displayText = computed(() => {
 const iconUrl = computed(() => {
   const entry = session.recent.find((s) => s.id === session.currentId)
   return entry?.icon_url ?? null
+})
+
+// Database counts under the selector; the line stays hidden if the stats request fails
+const stats = ref(null)
+onMounted(async () => {
+  try {
+    stats.value = await getStats()
+  } catch {
+    // Stats unavailable – leave the line out
+  }
 })
 
 onMounted(async () => {
@@ -198,6 +213,14 @@ onMounted(async () => {
 }
 .label {
   font-size: 1.75rem;
+}
+.db-stats {
+  margin: -12px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.db-stats a {
+  color: var(--accent);
 }
 .error {
   margin: 12px 0 0;
