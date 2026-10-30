@@ -11,6 +11,7 @@ Routes:
   GET  /api/v2/patients/search?q=   → patient search over data/*/patient.json
   GET  /api/v2/patients/{patient_id} → patient header
   GET  /api/contradictions          → all precomputed contradictions
+  GET  /api/v2/stats                → patient count and (validated) FHIR bundles / documents
   GET  /healthz                     → health check
 """
 from __future__ import annotations
@@ -28,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from app import images, originals, patient
+from app import images, originals, patient, stats
 from app.config import settings
 from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
@@ -438,6 +439,12 @@ async def image_dicom(patient_id: str, image_id: str) -> FileResponse:
 async def get_contradictions(patient_id: Optional[str] = None) -> list[dict[str, Any]]:
     store = _store_for(patient_id)
     return [cx.model_dump() for cx in store.contradictions]
+
+
+@app.get("/api/v2/stats")
+async def get_stats() -> dict[str, Any]:
+    """Patients in DATA_DIR, FHIR bundles in CACHE_DIR (R4B-validated) and the documents in them."""
+    return await asyncio.to_thread(stats.collect)
 
 
 @app.get("/healthz")

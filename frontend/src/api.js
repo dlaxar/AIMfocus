@@ -9,6 +9,13 @@ export async function searchPatients(q, limit = 10) {
   return res.json()
 }
 
+// Database counts: { patients, bundles, valid_bundles, documents, valid_documents, per_patient[] }.
+export async function getStats() {
+  const res = await fetch(`${BASE_URL}/v2/stats`)
+  if (!res.ok) throw new Error(`Stats request failed (${res.status})`)
+  return res.json()
+}
+
 // Creates a session (a core screen) for the given situation and returns its ID.
 // The core answers at once and keeps filling the screen in the background.
 export async function createSession(situation) {
