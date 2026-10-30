@@ -1,8 +1,9 @@
 """
 app/llm/client.py – thin LLM wrapper.
 
-Default backend: Google Gemini via `google-genai`.
-When LLM_FAKE=true, returns canned JSON responses from tests/fixtures/llm_responses/.
+Calls are routed by model name: "claude-" models to Anthropic (`anthropic`), all others to
+Google Gemini (`google-genai`). When LLM_FAKE=true, returns canned JSON responses from
+tests/fixtures/llm_responses/; preprocess.run --offline-llm answers calls from files.
 
 Usage:
     from app.llm.client import get_client

@@ -80,14 +80,16 @@ One finding is kept back as *possible* (`lv_wall`).
 
 ## Integration
 
-These steps touch shared files, so they are left to the file owners:
-
-- **Pipeline:** after S3 in `preprocess/run.py`, add
-  `from contradictions import run as cx; cx.run(cache_dir, patient_id, data_dir=data_dir, keep_s3=True)`.
-  Or replace S3 with it.
-- **Screen:** `fastpath` shows only contradictions whose passages or concepts overlap the
-  screen's facts. To show every contradiction, list the rest under the relevant ones,
-  with links to all their `passage_ids`.
+- **Pipeline:** this finder *is* stage S3 of `python -m preprocess.run` (rules only; the
+  earlier `preprocess/s3_contradictions.py` is no longer called by the pipeline). The
+  pipeline then writes `fhir.json`, which the runtime reads. After a standalone
+  `python -m contradictions` run, call `python -m preprocess.convert_cache --patient <id>`
+  to put the new `contradictions.json` into `fhir.json`.
+- **Screen:** a contradiction is attached to a card only when a value shown on it carries
+  one of the contradiction's passages or concepts (`screen.contradictions`, marked on the
+  values). Every other contradiction is listed in `screen.other_contradictions`, shown
+  below the screen with links to all its `passage_ids`. See
+  [screen-api.md](../docs/screen-api.md#5-contradictions).
 
 ## Tests
 

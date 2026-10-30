@@ -15,13 +15,14 @@ machine-readable schema is the core's OpenAPI document: `http://127.0.0.1:8001/o
 | Screen fills in (while the patient is picked) | `GET /api/v2/screens/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
 | … or poll | `GET /api/v2/screens/<id>` · `?wait=true` blocks until complete | the screen |
 | Demo without the LLM | `GET /api/v2/simulated/stream?interval=1` (SSE) | the same events, replaying the recorded screens in `streams/<n>.json` `interval` s apart |
-| Short card title | `GET /api/v2/screens/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
-| Patient search | `GET /api/v2/patients/search?q=<text>&limit=10` | patients whose name or ID contains the text (section 9) |
+| Short card title | `GET /api/v2/screens/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info", "icon_url": "https://unpkg.com/lucide-static@latest/icons/stethoscope.svg"}` |
+| Patient search | `GET /api/v2/patients/search?q=<text>&limit=10` | patients whose name, ID or date of birth contains the text (section 9) |
 | Show a source in its section | `GET /api/passages/<passage_id>/context` | the passage and the document section around it (section 6) |
 | Open a source letter | `GET /api/documents/<doc_id>` | the letter's text and passages (section 6) |
 | Ask about the patient | `POST /api/v2/chat` with `screen_id` | an answer with sources (section 7) |
 | Ask, with cards, streamed | `POST /api/v2/chat/stream` with `screen_id` (SSE) | `answer` at once, then `cards` as they come, then `done` (section 7) |
 | Patient header (always shown) | `GET /api/v2/patients/<patient_id>` | name, birth date, age, CAVE, height / weight / BMI, latest stay (section 9) |
+| Database counts (`/stats` page) | `GET /api/v2/stats` | `{patients, patients_with_fhir, bundles, valid_bundles, documents, valid_documents, per_patient[]}`; each bundle checked against the R4B models, cached until the file changes |
 
 `screen.status`: `starting` (select call running, `variables` empty) → `partial`
 (documented items there, text search running) → `complete`. Every update raises
@@ -502,7 +503,8 @@ Any field can be `null` (or `[]` for `allergies`) when it is not documented. An 
 not "no allergies".
 
 The patient search, `GET /api/v2/patients/search?q=<text>&limit=10` (limit 1–50), returns the
-entries of every `data/*/patient.json` whose name or ID contains the text (case-insensitive),
+entries of every `data/*/patient.json` whose name, ID or date of birth contains the text
+(case-insensitive; `1959`, `15.03.1959` and `1959-03-15` all match),
 without `ward`; an empty `q` returns `[]`. It also finds the imported FHIR patients.
 
 Also in the header: `deceased` (date or `null`), `source` (`"ibm"` letters or `"fhir"`

@@ -1,6 +1,8 @@
 # Plan: FHIR R4 as the only store
 
-Status: implemented on branch `fhir-store` (steps 1–3, 5–8; step 4 in a lighter form, see below).
+Status: implemented and merged into `main` (steps 1–3, 5–8; step 4 in a lighter form, see below).
+The runtime reads `cache/<patient>/fhir.json` by default; imported FHIR patients
+(`preprocess/import_fhir.py`) end in the same bundle format.
 Prototype quality is the goal: valid FHIR R4 outside, nothing lost inside.
 
 ## What is implemented
@@ -14,7 +16,7 @@ Prototype quality is the goal: valid FHIR R4 outside, nothing lost inside.
 | 5. ICD-10 / ATC / LOINC | done: IBM mentions matched to our facts and spread per concept; LOINC table checked on loinc.org |
 | 6. Tests | done: round trip, R4 validation, references, status mapping, codes, store on `fhir.json`, held-back findings |
 | 7. Real ingestion + eval | done, see `Results` |
-| 8. Docs | this file, `core/README.md` |
+| 8. Docs | this file, `core/README.md`, `docs/architecture.md` |
 
 Deviations from the design below:
 - The JSON stage files stay as the pipeline's working files; the runtime reads only `fhir.json`.

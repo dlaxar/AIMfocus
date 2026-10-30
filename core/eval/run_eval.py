@@ -2,14 +2,15 @@
 eval/run_eval.py – evaluation harness.
 
 Usage:
+    python -m eval.run_eval --v2             # the fast path the frontend uses (/api/v2/screens)
     python -m eval.run_eval
     python -m eval.run_eval --extra          # include situations_extra.md
     python -m eval.run_eval --judge          # LLM checks each question against the screen
     python -m eval.run_eval --url http://localhost:8001 --cases-dir ../cases
 
 For each situation in <cases-dir>/situations.md (and optionally eval/situations_extra.md):
-  1. POST "title. description" to /api/screen – never the check questions – and record
-     wall-clock time.
+  1. POST "title. description" to /api/screen (with --v2: /api/v2/screens, timed until the
+     screen is complete) – never the check questions – and record wall-clock time.
   2. Check traceability: the passage at start:end must contain the quoted text.
   3. Count validator drops from meta.dropped_items (hallucination monitor).
   4. Collect contradictions (unique across all screens).

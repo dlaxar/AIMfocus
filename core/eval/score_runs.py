@@ -1,12 +1,12 @@
 """
-eval/score_runs.py – scores `run_eval --v2 --extra` outputs (23 situations, 69 questions)
+eval/score_runs.py – scores `run_eval --v2 --extra` outputs (31 situations, 93 questions)
 with one fixed criterion per question, applied to the text of the screen.
 
 Usage:
     python -m eval.run_eval --v2 --extra > /tmp/run.txt 2> /tmp/run.err
     python eval/score_runs.py /tmp/run.txt [/tmp/other_run.txt ...]
 
-Expected answers: cases/expected.json (1.x–5.x) and eval/expected_extra.json (6.x–23.x).
+Expected answers: cases/expected.json (1.x–5.x) and eval/expected_extra.json (6.x–31.x).
 A criterion checks that the expected facts are on the screen; for "is X documented?"
 questions it accepts an explicit "not documented" item or an equivalent statement.
 """

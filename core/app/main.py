@@ -1,15 +1,20 @@
 """
-app/main.py – FastAPI application with all routes (section 8 of the design doc).
+app/main.py – FastAPI application: shared routes here, screens (app/fastpath/router.py) and
+chat (app/chat/router.py) mounted as routers. Full route list: core/README.md.
 
-Routes:
-  POST /api/screen                  → Screen
-  POST /api/screen/stream           → SSE: plan | section | done events
+Routes defined here:
+  POST /api/screen                  → Screen (earlier R1–R4 runtime, not used by the frontend)
+  POST /api/screen/stream           → same, SSE: plan | section | done events
   GET  /api/documents               → list of documents
   GET  /api/documents/{doc_id}      → document text + passages
+  GET  /api/documents/{doc_id}/original[/file] → the original file's text / the file itself
   GET  /api/passages/{passage_id}   → single passage with offsets
   GET  /api/passages/{passage_id}/context → passage inside its document section
-  GET  /api/v2/patients/search?q=   → patient search over data/*/patient.json
+  GET  /api/passages/{passage_id}/original → the passage's span in the original file
+  GET  /api/v2/patients             → every patient with a cache
+  GET  /api/v2/patients/search?q=   → patient search over data/*/patient.json (name, ID, birth date)
   GET  /api/v2/patients/{patient_id} → patient header
+  GET  /api/v2/patients/{patient_id}/images[/…] → DICOM images: list, preview, slices, file
   GET  /api/contradictions          → all precomputed contradictions
   GET  /api/v2/stats                → patient count and (validated) FHIR bundles / documents
   GET  /healthz                     → health check
