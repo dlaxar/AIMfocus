@@ -10,51 +10,101 @@
       <img src="../assets/logo.png" alt="Logo" class="header-logo" />
     </header>
 
-    <!-- ── Fact cards (scrollable body) ──────────── -->
+    <!-- ── Screen (scrollable body) ──────────────── -->
     <div class="facts-scroll">
-      <!-- Patient info banner -->
-      <div v-if="patient" class="patient-info">
-        <h1 class="patient-name">{{ patient.name }}</h1>
-        <div class="patient-meta">
-          <span v-if="patient.dob">{{ patient.dob }}</span>
-          <span v-if="patient.ward" class="meta-sep">·</span>
-          <span v-if="patient.ward">{{ patient.ward }}</span>
-          <span v-if="patient.id" class="meta-sep">·</span>
-          <span v-if="patient.id" class="patient-id">{{ patient.id }}</span>
+      <div class="screen-body">
+        <!-- Patient and situation -->
+        <div class="patient-info">
+          <h1 v-if="patient" class="patient-name">{{ patient.name }}</h1>
+          <div v-if="patient" class="patient-meta">
+            <span v-for="(m, i) in patientMeta" :key="i">{{ m }}</span>
+          </div>
+          <p v-if="screen" class="situation">
+            <strong v-if="screen.role">{{ screen.role }}</strong>
+            <span v-if="screen.task"> — {{ screen.task }}</span>
+            <span v-if="screen.reference_date" class="as-of">as of {{ formatDate(screen.reference_date) }}</span>
+            <span v-if="screen.status !== 'complete'" class="live">
+              <span class="live-dot" aria-hidden="true" />searching the letters…
+            </span>
+          </p>
         </div>
-      </div>
 
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-else-if="!screen" class="empty-state muted">Loading…</p>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <p v-else-if="!screen" class="empty-state muted">Loading…</p>
+        <p v-else-if="screen.error" class="error" role="alert">{{ screen.error }}</p>
 
-      <div v-else class="facts-grid">
-        <FactCard
-          v-for="v in screen.variables"
-          :key="v.name"
-          :label="v.label"
-          :value="v.state === 'pending' ? null : v.value"
-          :class="['fact-card-wrap', v.state]"
-        >
-          <span class="badge">{{ stateLabel[v.state] ?? v.state }}</span>
-          <ul v-if="v.sources && v.sources.length" class="sources">
-            <li v-for="s in v.sources" :key="s.passage_id">
-              <span class="doc">{{ s.doc_title }}, {{ s.doc_date }}</span>
-              <q>{{ s.quote_de }}</q>
+        <p v-if="screen?.contradictions?.length" class="cx-banner">
+          <ContradictionBadge :ids="screen.contradictions.map((c) => c.contradiction_id)" />
+          {{ screen.contradictions.length }} contradiction{{ screen.contradictions.length > 1 ? 's' : '' }}
+          between the letters affect{{ screen.contradictions.length > 1 ? '' : 's' }} this screen; the values involved are marked.
+        </p>
+
+        <!-- Tiers, top to bottom -->
+        <section v-for="t in tiers" :key="t.tier" class="tier" :class="`tier-${t.tier}`">
+          <header class="tier-head">
+            <h2>{{ TIER_LABEL[t.tier] }}</h2>
+            <span class="tier-hint">{{ TIER_HINT[t.tier] }}</span>
+            <button
+              v-if="t.tier === 'background'"
+              type="button"
+              class="tier-toggle"
+              :aria-expanded="backgroundOpen"
+              @click="backgroundOpen = !backgroundOpen"
+            >
+              {{ backgroundOpen ? 'Show summary' : 'Show details' }}
+            </button>
+          </header>
+
+          <!-- Collapsed: one headline per variable -->
+          <table v-if="t.tier === 'background' && !backgroundOpen" class="fact-table value-table">
+            <colgroup><col class="col-label" /><col /><col class="col-date" /><col class="col-icons" /></colgroup>
+            <tbody>
+              <tr v-for="v in t.variables" :key="v.name" :class="{ 'has-cx': v.contradictions?.length }">
+                <th scope="row" class="label-cell"><span class="var-label">{{ v.label }}</span></th>
+                <td>
+                  <span v-if="v.state === 'pending'" class="skeleton" />
+                  <span v-else :class="{ missing: v.state === 'not_documented' || v.state === 'not_available' }">{{ v.headline?.text ?? v.value }}</span>
+                  <span v-if="v.headline?.change" class="date-cell"> · {{ v.headline.change }}</span>
+                </td>
+                <td class="date-cell">{{ formatDate(v.headline?.date) }}</td>
+                <td class="icon-cell">
+                  <ContradictionBadge :refs="v.contradictions ?? []" />
+                  <SourceButton v-if="v.sources?.length" :sources="v.sources" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <template v-else>
+            <div v-for="b in t.blocks" :key="b.key" class="block" :class="`block-${b.kind}`">
+              <component :is="BLOCKS[b.kind]" :variables="b.variables" />
+            </div>
+          </template>
+        </section>
+
+        <!-- Contradictions elsewhere in the record -->
+        <details v-if="screen?.other_contradictions?.length" class="other-cx">
+          <summary>
+            {{ screen.other_contradictions.length }} other contradiction{{ screen.other_contradictions.length > 1 ? 's' : '' }} in the record
+          </summary>
+          <ul>
+            <li v-for="cx in screen.other_contradictions" :key="cx.contradiction_id">
+              <ContradictionBadge :ids="[cx.contradiction_id]" />
+              <span>{{ cx.summary_en }}</span>
             </li>
           </ul>
-          <p v-if="v.note && v.state !== 'documented'" class="note">{{ v.note }}</p>
-        </FactCard>
-      </div>
+        </details>
 
-      <!-- ── Timings ──────────────────────────────────── -->
-      <div v-if="screen?.timings_ms" class="timings">
-        <span class="timings-label">Timings</span>
-        <dl class="timings-grid">
-          <template v-for="(val, key) in screen.timings_ms" :key="key">
-            <dt>{{ key.replace(/_/g, ' ') }}</dt>
-            <dd>{{ val.toFixed(1) }} ms</dd>
-          </template>
-        </dl>
+        <!-- ── Timings ──────────────────────────────────── -->
+        <div v-if="screen?.timings_ms" class="timings">
+          <span class="timings-label">Timings</span>
+          <dl class="timings-grid">
+            <template v-for="(val, key) in screen.timings_ms" :key="key">
+              <dt>{{ key.replace(/_/g, ' ') }}</dt>
+              <dd>{{ val.toFixed(1) }} ms</dd>
+            </template>
+          </dl>
+        </div>
       </div>
     </div>
 
@@ -82,31 +132,62 @@
         </button>
       </div>
     </div>
+
+    <DocumentDrawer />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, provide, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import FactCard from '../components/FactCard.vue'
+import ContradictionBadge from '../components/screen/ContradictionBadge.vue'
+import SourceButton from '../components/screen/SourceButton.vue'
+import DocumentDrawer from '../components/screen/DocumentDrawer.vue'
+import ValueTable from '../components/screen/ValueTable.vue'
+import DataTable from '../components/screen/DataTable.vue'
+import ListGroup from '../components/screen/ListGroup.vue'
+import TrendGroup from '../components/screen/TrendGroup.vue'
+import { groupByTier } from '../components/screen/layout.js'
+import { formatDate } from '../components/screen/format.js'
+import '../components/screen/screen.css'
 import { getScreen, watchScreen } from '../api.js'
 import { session, form } from '../store.js'
 
 const router = useRouter()
 const patient = computed(() => form.patientData)
+const patientMeta = computed(() => {
+  const p = patient.value
+  if (!p) return []
+  return [
+    p.sex,
+    p.age != null ? `${p.age} y` : null,
+    p.dateOfBirth ? `born ${formatDate(p.dateOfBirth)}` : null,
+    p.id,
+  ].filter(Boolean)
+})
 
 // ── Screen / facts ────────────────────────────────────────────────────────────
 const screen = ref(null)
 const error  = ref('')
 let stop = null
 
-const stateLabel = {
-  documented:     'documented',
-  derived:        'from text',
-  pending:        'searching',
-  not_documented: 'not documented',
-  check:          'check',
+const TIER_LABEL = { critical: 'Critical', important: 'Important', background: 'Background' }
+const TIER_HINT = {
+  critical: 'check before acting',
+  important: 'for this task',
+  background: 'context',
 }
+const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends: TrendGroup }
+
+const tiers = computed(() => (screen.value ? groupByTier(screen.value.variables ?? []) : []))
+const backgroundOpen = ref(false)
+
+// Every contradiction in the record by ID, for the badges on values, rows and points
+const contradictionIndex = computed(() => new Map(
+  [...(screen.value?.other_contradictions ?? []), ...(screen.value?.contradictions ?? [])]
+    .map((c) => [c.contradiction_id, c]),
+))
+provide('contradictionIndex', contradictionIndex)
 
 onMounted(async () => {
   if (!session.currentId) {
@@ -210,11 +291,12 @@ function autoResize(e) {
 
 /* ── Patient info banner ──────────────────────────── */
 .patient-info {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .patient-name {
   margin: 0 0 4px;
+  text-align: left;
   font-size: 1.6rem;
   font-weight: 600;
 }
@@ -228,7 +310,9 @@ function autoResize(e) {
   align-items: center;
 }
 
-.meta-sep {
+.patient-meta span + span::before {
+  content: '·';
+  margin-right: 4px;
   color: var(--border);
 }
 
@@ -245,17 +329,121 @@ function autoResize(e) {
   padding: 20px 24px 120px;
 }
 
-.facts-grid {
-  display: grid;
-  /* Mobile: single column. Auto-fill wider cards on desktop. */
-  grid-template-columns: 1fr;
-  gap: 12px;
+.screen-body {
+  max-width: 880px;
+  margin: 0 auto;
 }
 
-@media (min-width: 600px) {
-  .facts-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  }
+.situation {
+  margin: 10px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.as-of {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% { opacity: 0.3; }
+}
+
+.cx-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 8px;
+  background: var(--cx-bg);
+  border: 1px solid #f2b8b5;
+  font-size: 0.84rem;
+}
+
+/* ── Tiers ──────────────────────────────────────────── */
+.tier {
+  margin-bottom: 22px;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--border);
+}
+.tier-critical {
+  border-left-color: var(--cx);
+}
+.tier-important {
+  border-left-color: var(--accent);
+}
+.tier-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.tier-head h2 {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tier-critical .tier-head h2 {
+  color: var(--cx);
+}
+.tier-hint {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.tier-toggle {
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+.tier-toggle:hover {
+  text-decoration: underline;
+}
+.block + .block {
+  margin-top: 14px;
+}
+
+.other-cx {
+  margin-top: 8px;
+  font-size: 0.84rem;
+}
+.other-cx summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.other-cx ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.other-cx li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .empty-state {
@@ -334,32 +522,8 @@ function autoResize(e) {
   opacity: 0.85;
 }
 
-/* ── Screen variable extras ─────────────────────────── */
-.error { color: #ce2c31; padding: 0 24px; }
+.error { color: #ce2c31; }
 .muted { color: var(--muted); }
-
-.badge {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 2px;
-}
-:deep(.fact-card-wrap.pending) .badge { color: var(--accent); }
-:deep(.fact-card-wrap.not_documented) { border-style: dashed; }
-:deep(.fact-card-wrap.check) { border-color: #f5a623; }
-
-.sources {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 0.85rem;
-}
-.doc { display: block; color: var(--muted); }
-q { font-style: italic; }
-.note { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
 
 /* ── Timings ────────────────────────────────────────── */
 .timings {
