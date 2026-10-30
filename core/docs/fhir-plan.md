@@ -1,0 +1,150 @@
+# Plan: FHIR R4 as the only store
+
+Status: plan, not implemented. Prototype quality is the goal: valid FHIR R4 outside, nothing lost inside.
+
+## Goal
+
+- Ingestion writes **one file**, `cache/<patient>/fhir.json`: an R4 `Bundle` (type `collection`).
+- It replaces every cache file we have today: `documents.json`, `passages.json`, `facts.raw.json`,
+  `facts.json`, `concepts.json`, `derived.json`, `contradictions.json`, `contradictions_report.json`,
+  `s1_report.json`, `s1_aliases.json`, `fact_sheet.txt`, `manifest.json`.
+- Pipeline stages hand their results to each other through this file, and the runtime reads only this file.
+- Diagnoses carry **ICD-10** codes and medications **ATC** codes, taken from IBM's extraction
+  (`data/<patient>/diagnoses.json`, `medication.json`). Measurements get **LOINC** codes from a fixed table.
+
+## Design
+
+### One conversion layer, everything else unchanged
+
+The pipeline and the runtime keep working with today's Pydantic objects (`Document`, `Passage`, `Fact`,
+`DerivedFact`, `Concept`, `Contradiction`). Only persistence changes:
+
+```
+core/app/fhir/
+  cache.py      Cache dataclass (all objects of one patient) + load(path) / save(cache, path)
+  mapping.py    object <-> FHIR resource, one pair of functions per fact type
+  ids.py        our IDs <-> FHIR ids ("F:12340012:dia:01" -> "F-12340012-dia-01")
+  extensions.py extension URLs and helpers
+  codes.py      ICD-10 / ATC from IBM's files, LOINC table
+```
+
+- Every stage replaces its `json.loads(...)` / `write_text(...)` with `cache = fhir.load(path)` /
+  `fhir.save(cache, path)`.
+- `FactStore.load()` calls `fhir.load()` and builds its indices as today.
+- Fast path, chat, validator, screens and eval only use the `FactStore` API, so they don't change.
+- `fact_sheet` is not stored: `FactStore.load()` regenerates it with the same function S4 uses today.
+- Resources are built with `fhir.resources` (R4B models), so an invalid resource fails during ingestion.
+
+### Restarting from a stage (`--from sN`)
+
+Every resource gets `meta.tag` with the stage that created it (`s0` … `s4`). `--from sN` loads the
+bundle, drops all resources tagged `sN` or later, and runs from there. That gives the same behaviour as
+today's separate files.
+
+### Mapping
+
+| Today | FHIR R4 | Notes |
+|---|---|---|
+| Patient (`data/<patient>/patient.json`) | `Patient` | synthetic; `birthDate` checked against the letters |
+| `Document` | `DocumentReference` | normalized text as `content.attachment` (text/plain); date, type, title, department |
+| `Passage` | extension on its `DocumentReference` | id, start, end, kind, section, copy_of; text = slice of the document text |
+| S1 coverage per document (`s1_report`) | extension on the `DocumentReference` | |
+| Fact `diagnosis` | `Condition` | ICD-10 coding |
+| Fact `finding` | `Observation`, category `exam` | |
+| Fact `measurement` | `Observation`, category `vital-signs` or `laboratory` | LOINC coding, UCUM unit; blood pressure as two components |
+| Fact `medication` | `MedicationStatement` | ATC coding; dosage text from the schedule (1-0-1) |
+| Fact `allergy` | `AllergyIntolerance` | |
+| Fact `procedure` | `Procedure` | |
+| Fact `recommendation`, `plan` | `ServiceRequest` | intent `proposal` / `plan` |
+| Fact `event` (admission, discharge) | `Encounter` | |
+| Fact `demographic` | `Observation` | |
+| `DerivedFact` (BMI, weight change, current medication, follow-up status) | `Observation` with `derivedFrom` | |
+| `Concept` | coding in our CodeSystem on every resource of the concept | label as `display`; timelines recomputed on load |
+| Alias merges (`s1_aliases`) | extension on the `Bundle` | for review only |
+| `Contradiction` (shown) | `DetectedIssue`, status `final` | `implicated` = the conflicting resources |
+| Hidden finding (`contradictions_report`) | `DetectedIssue`, status `preliminary` | with rule, certainty and judge verdict |
+| Manifest | `Bundle.meta` + extension | version, model, coverage, counts |
+
+**Every fact resource** fills the standard FHIR fields (code text, status, date, value, body site for
+laterality) and carries **one extension with our original values**: fact id, passage id, offsets,
+verbatim span, our status, `fields`, `en`, `de`. Loading reads the extension, so the round trip is
+lossless and doesn't depend on FHIR's status vocabulary.
+
+### Status mapping (standard fields)
+
+| Our status | Condition (clinical / verification) | MedicationStatement | Procedure | ServiceRequest |
+|---|---|---|---|---|
+| positive | active / confirmed | – | completed | – |
+| suspected | active / provisional | – | – | – |
+| negative | – / refuted | – | not-done | – |
+| history | inactive / confirmed | – | completed | – |
+| current, started, changed | – | active | – | – |
+| discontinued, historical | – | stopped / completed | – | – |
+| recommended, open | – | – | – | active |
+| done | – | – | – | completed |
+| unknown | – / unconfirmed | unknown | unknown | unknown |
+
+### ICD-10 and ATC from IBM's extraction
+
+A code-only step at the end of S1, after the alias merge. No LLM, so no invented codes.
+
+1. Walk the mentions in `diagnoses.json` and `medication.json` (and optionally MEL codes from `procedures.json`).
+2. Strip IBM's markup (`<SPAN …>`, entities, extra spaces) and find the passage in the mention's
+   `documentIds` that contains the text. On patient 0000-0001, 187 of 189 mentions are found this way.
+3. Take our fact on that passage whose span overlaps the mention, and whose type fits:
+   - ICD-10 → `diagnosis` or `finding`
+   - ATC → `medication`
+4. Spread the code to every fact of the same concept, since a concept is one clinical thing. A concept
+   with two different codes keeps both, and we log it.
+5. Systems: `http://hl7.org/fhir/sid/icd-10`, `http://www.whocc.no/atc`, `http://loinc.org`.
+
+Expected coverage from the earlier comparison:
+- **Medication:** almost complete. All 22 IBM mentions sit on our medication facts, and 11 of 12 ingredients have an ATC code.
+- **Diagnoses:** 75 IBM mentions match one of our diagnosis facts directly. Findings and our extra diagnoses stay without a code.
+
+LOINC: a fixed table for our measurement keys (weight, height, BMI, blood pressure, heart rate, temperature,
+HbA1c, LVEF, …). Check every code against loinc.org before committing.
+
+Follow-up, not part of this plan: use the codes as a merge key in the alias merge. Same type and same
+ICD-10 or ATC code means the same concept.
+
+## Steps
+
+1. **`app/fhir/` with `load` / `save` and a round-trip test.** Today's JSON cache → `Cache` → bundle →
+   `Cache` must give identical objects. Also check that every resource validates as R4 and every
+   reference resolves.
+2. **One-off converter:** `python -m preprocess.convert_cache --patient 0000-0001` turns an existing JSON
+   cache into `fhir.json`, so we can test the runtime without a new ingestion.
+3. **`FactStore.load()` reads `fhir.json`.** Run the eval on the converted cache. It should give the same
+   result as the JSON cache it came from: 62/69 on all 23 situations, 15/15 on the core 5, give or take
+   the runtime's run-to-run variation.
+4. **Stages switch to the bundle:**
+   - S0 writes `DocumentReference`s with passages
+   - S1 adds the fact resources and the codes
+   - S2 adds concept codings and derived observations
+   - S3 (the contradiction finder in `contradictions/`) adds `DetectedIssue`s
+   - S4 writes the manifest
+
+   `--from` works through the stage tags. The old JSON writing goes away.
+5. **ICD-10 / ATC tagging and the LOINC table**, with unit tests on a small invented IBM-style file.
+6. **Tests and fixtures:** `tests/test_smoke.py::_build_fixture_cache` writes `fhir.json` instead of the
+   JSON files. Stage tests read and write through `app/fhir`.
+7. **One real ingestion** (about 2–6 min of Gemini calls), then the eval, then compare with step 3.
+8. **Docs:** `core/README.md` (cache layout, pipeline table, mapping) and the root README.
+
+Steps 1–3 are safe on their own: the runtime runs on FHIR while the pipeline still writes JSON. That's
+a good point to stop if time runs out.
+
+## Dependencies
+
+- `fhir.resources` (R4B models, Pydantic v2) in `core/requirements.txt`.
+
+## Risks and open points
+
+- **Our extensions aren't profiled.** That's fine for a prototype, but a strict validator will warn about
+  unknown extensions.
+- **The contradiction finder in `contradictions/`** is another team member's code. Step 4 changes how it
+  reads and writes, so coordinate before touching it.
+- **Rewriting the whole file after each stage:** about a few MB per patient, negligible.
+- **IBM codes only exist for patients IBM processed.** For a new patient without these files, facts
+  simply stay uncoded.
