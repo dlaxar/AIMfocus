@@ -64,3 +64,32 @@ export function watchScreen(sessionId, onScreen, onError) {
   }
   return () => source.close()
 }
+
+// Passage → { doc: {doc_id, title, date, type, department}, passage, section: {name, start, end, text} }.
+// Cached per passage: the same source is opened many times on one screen.
+const passageContexts = new Map()
+export function getPassageContext(passageId) {
+  if (!passageContexts.has(passageId)) {
+    const p = fetch(`${BASE_URL}/passages/${encodeURIComponent(passageId)}/context`).then((res) => {
+      if (!res.ok) throw new Error(`Source request failed (${res.status})`)
+      return res.json()
+    })
+    p.catch(() => passageContexts.delete(passageId))
+    passageContexts.set(passageId, p)
+  }
+  return passageContexts.get(passageId)
+}
+
+// Whole letter: { doc_id, title, date, type, department, text, passages[] }. Cached per document.
+const documents = new Map()
+export function getDocument(docId) {
+  if (!documents.has(docId)) {
+    const p = fetch(`${BASE_URL}/documents/${encodeURIComponent(docId)}`).then((res) => {
+      if (!res.ok) throw new Error(`Document request failed (${res.status})`)
+      return res.json()
+    })
+    p.catch(() => documents.delete(docId))
+    documents.set(docId, p)
+  }
+  return documents.get(docId)
+}
