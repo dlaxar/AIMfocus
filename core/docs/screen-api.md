@@ -11,6 +11,7 @@ machine-readable schema is the core's OpenAPI document: `http://127.0.0.1:8001/o
 | Step | Call | Returns |
 |---|---|---|
 | Clinician enters the situation | `POST /api/v2/screens` with `{"situation": "…", "patient_id"?: "…"}` | the screen at once (`202`); `screen.screen_id` is the session ID, `screen.status = "starting"`; without `patient_id` the IBM patient (section 10) |
+| Patient picked | `PUT /api/v2/screens/<id>/patient` with `{"patient_id": "coh-972f6a59"}` (the `id` from the patient search) | the same screen rebuilt for that patient, **same `screen_id`**, `status: "starting"`, higher `version`. Without this call the screen stays on the default patient (`0000-0001`) |
 | Screen fills in (while the patient is picked) | `GET /api/v2/screens/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
 | … or poll | `GET /api/v2/screens/<id>` · `?wait=true` blocks until complete | the screen |
 | Demo without the LLM | `GET /api/v2/simulated/stream?interval=1` (SSE) | the same events, replaying the recorded screens in `streams/<n>.json` `interval` s apart |
@@ -517,6 +518,7 @@ clinical notes, and a DICOM MRI of the head each). Every route works for every p
 |---|---|---|
 | Patients with data | `GET /api/v2/patients` | `[{patient_id, name, sex, birth_date, source, images, default}]` |
 | Screen for a patient | `POST /api/v2/screens` `{"situation", "patient_id"}` | as section 1; `screen.patient_id` says whose |
+| Patient picked after the situation | `PUT /api/v2/screens/<id>/patient` `{"patient_id"}` | the same screen ID, rebuilt for that patient; stream, chat and the Opus upgrade follow it |
 | Chat | as section 7 | follows the patient of its `screen_id` (or `patient_id` in the body) |
 | Source letter / record section | `?patient_id=<id>` on `/api/documents/<doc_id>`, `/original`, `/api/passages/<id>/context`, `/api/passages/<id>/original` | as section 6 |
 | A patient's images | `GET /api/v2/patients/<id>/images` | `[ImageRef + {fact_id, title, rows, columns}]` |
@@ -534,6 +536,13 @@ Conditions`, `– Medications`, `– Observations`, `– Imaging`, …) with one
 the newest clinical notes. Sources point into them exactly as into a letter. `quote_de` then
 holds English text (the field name is kept for existing code). Codes are the record's own
 (SNOMED CT, RxNorm, LOINC).
+
+Picking the patient: the situation screen is created before the patient is known, so it is
+built for the default patient. When the clinician picks a patient, call
+`PUT /api/v2/screens/<id>/patient` once with the search result's `id`. The core cancels the
+builds for the earlier patient and builds the screen again under the same ID; then load and
+stream it as before (`GET /api/v2/screens/<id>`, `/stream`). Calling it again with the same
+patient changes nothing; a chat started for the earlier patient continues as a new chat.
 
 Unknown patient: `404`. Chat with a `patient_id` that differs from its screen's patient: `400`.
 

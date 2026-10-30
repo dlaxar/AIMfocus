@@ -14,6 +14,8 @@ app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
   GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update (the whole screen,
                                           also when the upgrade replaces it), then "done"
   GET  /api/v2/simulated/stream[?interval=1]  same SSE, replaying the recorded screens in streams/
+  PUT  /api/v2/screens/{id}/patient       {"patient_id": ...} → the same screen rebuilt for that
+                                          patient, same ID (situation entered before the patient)
 
   Every screen is built twice in parallel: RUNTIME_MODEL (fast, shown first) and UPGRADE_MODEL
   (slower); the slower one replaces the fast one under the same ID when it is done.
@@ -29,7 +31,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import settings
 from app.fastpath import service
-from app.fastpath.models import FastScreen, ScreenRequest
+from app.fastpath.models import FastScreen, PatientRequest, ScreenRequest
 from app.runtime.screen import _best_passage_id, _build_source
 from app.schemas import Fact
 from app.store import FactStore, UnknownPatient, get_store
@@ -133,6 +135,17 @@ async def get_screen(screen_id: str, wait: bool = False, final: bool = False) ->
     if screen is None:
         raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
     return screen
+
+
+@router.put("/screens/{screen_id}/patient", response_model=FastScreen)
+async def set_screen_patient(screen_id: str, req: PatientRequest) -> FastScreen:
+    """
+    The patient picked after the situation: the screen is built again for this patient under
+    the same ID (status "starting", version higher than before). Stream and chat follow it.
+    """
+    if service.get_screen(screen_id) is None:
+        raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
+    return await service.set_patient(screen_id, store_for(req.patient_id))
 
 
 @router.get("/screens/{screen_id}/summary")

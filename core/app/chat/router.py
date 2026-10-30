@@ -30,6 +30,9 @@ def _patient_store(req: ChatRequest) -> FactStore:
         raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found")
     chat = service.get_chat(req.chat_id) if req.chat_id else None
     screen = fastpath.get_screen(req.screen_id) if req.screen_id else None
+    if chat and screen and chat.patient_id and screen.patient_id and chat.patient_id != screen.patient_id:
+        # The screen was switched to another patient (PUT /screens/{id}/patient): a new conversation
+        req.chat_id, chat = None, None
     known = {p for p in (chat.patient_id if chat else "", screen.patient_id if screen else "") if p}
     if req.patient_id and known - {req.patient_id} or len(known) > 1:
         raise HTTPException(status_code=400, detail="chat, screen and patient_id belong to different patients")

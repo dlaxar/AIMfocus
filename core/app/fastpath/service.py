@@ -529,6 +529,36 @@ async def create_screen(situation: str, store: FactStore, max_variables: Optiona
     return screen
 
 
+async def set_patient(screen_id: str, store: FactStore) -> Optional[FastScreen]:
+    """
+    The situation was entered before the patient was picked: build the same screen again for
+    this patient, under the same screen_id (stream, chat and upgrade follow it). The running
+    builds for the earlier patient are cancelled. Same patient → the screen as it is.
+    """
+    old = _screens.get(screen_id)
+    if old is None:
+        return None
+    if old.patient_id == store.patient_id:
+        return old
+    for tasks in (_tasks, _upgrade_tasks):
+        task = tasks.pop(screen_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+    t0 = time.perf_counter()
+    screen = FastScreen(
+        screen_id=screen_id, patient_id=store.patient_id, model=settings.RUNTIME_MODEL,
+        situation=old.situation, reference_date=store.reference_date() or None,
+        version=old.version + 1,   # newer than anything sent for the earlier patient
+    )
+    _screens[screen_id] = screen
+    _tasks[screen_id] = asyncio.create_task(_build(screen, store, t0))
+    if old.upgrade is not None and settings.UPGRADE_MODEL and settings.UPGRADE_MODEL != settings.RUNTIME_MODEL:
+        screen.upgrade = "running"
+        _upgrade_tasks[screen_id] = asyncio.create_task(_upgrade(screen, store, t0))
+    logger.info("fastpath: screen %s now for patient %s", screen_id, store.patient_id)
+    return screen
+
+
 async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
     """
     The same screen built with UPGRADE_MODEL, in its own object. When it is complete it is
@@ -546,6 +576,8 @@ async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
         logger.warning("fastpath: upgrade of screen %s not used: %s", fast.screen_id, slow.error or "no variables")
         fast.upgrade = "failed"
         fast.version += 1
+        return
+    if _screens.get(fast.screen_id) is not fast:   # the screen was rebuilt meanwhile (other patient)
         return
     slow.timings_ms.update({f"fast_{k}": v for k, v in fast.timings_ms.items()})
     slow.upgrade = "done"

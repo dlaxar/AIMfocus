@@ -208,3 +208,56 @@ class TestPortablePaths:
             assert client.get(f"{base}/preview.png").status_code == 200
         finally:
             info["dicom"] = real
+
+
+class TestPatientPickedLater:
+    """The situation is entered first (screen for the default patient), the patient picked later."""
+
+    def test_screen_is_rebuilt_for_the_picked_patient_under_the_same_id(self, client):
+        screen = client.post("/api/v2/screens", json={"situation": "Neurologist, headache"}).json()
+        first = client.get(f"/api/v2/screens/{screen['screen_id']}?wait=true").json()
+        assert first["patient_id"] == "TEST"
+        out = client.put(f"/api/v2/screens/{screen['screen_id']}/patient", json={"patient_id": PID})
+        assert out.status_code == 200
+        switched = out.json()
+        assert switched["screen_id"] == screen["screen_id"] and switched["patient_id"] == PID
+        assert switched["version"] > first["version"]
+        done = client.get(f"/api/v2/screens/{screen['screen_id']}?wait=true").json()
+        assert done["patient_id"] == PID and done["status"] == "complete"
+        # the same patient again: nothing is rebuilt
+        again = client.put(f"/api/v2/screens/{screen['screen_id']}/patient", json={"patient_id": PID}).json()
+        assert again["version"] == done["version"]
+
+    def test_chat_follows_the_switched_screen(self, client):
+        screen = client.post("/api/v2/screens", json={"situation": "Neurologist, headache"}).json()
+        sid = screen["screen_id"]
+        before = client.post("/api/v2/chat", json={"question": "MRI?", "screen_id": sid}).json()
+        assert client.get(f"/api/v2/chat/{before['chat_id']}").json()["patient_id"] == "TEST"
+        client.put(f"/api/v2/screens/{sid}/patient", json={"patient_id": PID})
+        after = client.post("/api/v2/chat", json={"question": "MRI?", "screen_id": sid, "chat_id": before["chat_id"]})
+        assert after.status_code == 200
+        chat = client.get(f"/api/v2/chat/{after.json()['chat_id']}").json()
+        assert chat["patient_id"] == PID and after.json()["chat_id"] != before["chat_id"]   # a new conversation
+
+    def test_unknown_screen_or_patient_is_404(self, client):
+        assert client.put("/api/v2/screens/nope/patient", json={"patient_id": PID}).status_code == 404
+        screen = client.post("/api/v2/screens", json={"situation": "x y"}).json()
+        assert client.put(f"/api/v2/screens/{screen['screen_id']}/patient", json={"patient_id": "NOPE"}).status_code == 404
+
+    def test_upgrade_for_the_earlier_patient_never_replaces_the_new_screen(self, client, monkeypatch):
+        import app.llm.client as client_mod
+        from app.config import settings
+        from tests.test_upgrade import _ModelClient
+        monkeypatch.setattr(settings, "RUNTIME_MODEL", "fast-model")
+        monkeypatch.setattr(settings, "UPGRADE_MODEL", "slow-model")
+        previous = client_mod._client_instance
+        client_mod.use_client(_ModelClient({"slow-model": 0.3}))
+        try:
+            screen = client.post("/api/v2/screens", json={"situation": "Neurologist, headache"}).json()
+            sid = screen["screen_id"]
+            client.get(f"/api/v2/screens/{sid}?wait=true")            # fast screen done, upgrade still running
+            client.put(f"/api/v2/screens/{sid}/patient", json={"patient_id": PID})
+            final = client.get(f"/api/v2/screens/{sid}?wait=true&final=true").json()
+            assert final["patient_id"] == PID and final["model"] == "slow-model" and final["upgrade"] == "done"
+        finally:
+            client_mod.use_client(previous)

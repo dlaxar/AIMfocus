@@ -205,6 +205,10 @@ class FastScreen(BaseModel):
     version: int = 0                            # bumped on every update (for SSE / polling)
 
 
+class PatientRequest(BaseModel):
+    patient_id: str                    # the patient picked after the situation was entered
+
+
 class ScreenRequest(BaseModel):
     situation: str
     patient_id: Optional[str] = None   # default: the configured patient (PATIENT_ID)
