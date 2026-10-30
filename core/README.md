@@ -128,9 +128,6 @@ cache/                    gitignored – preprocessing output
 | Upgrade | The same screen with `UPGRADE_MODEL` (Opus 5.5) replaces the fast one under the same ID |
 | Chat | One cached-prefix call per question (`chat`), same validation, up to 2 cards via the screen builder |
 
-Typical timings with Claude Haiku 5.5: documented cards after 2–4 s, complete screen after
-3–7 s, chat answer about 2 s.
-
 ---
 
 ## API

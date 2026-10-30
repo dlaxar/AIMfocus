@@ -33,7 +33,7 @@ trusted.
 ## What they built
 
 AIMfocus: the clinician types or says who they are and what they're about to do
-("Emergency department, blurry vision"), picks the patient, and in about 5 seconds gets one screen
+("Emergency department, blurry vision"), picks the patient, and gets one screen
 with only the facts that role needs, in three tiers: **Important** (check before acting),
 **Additional** (for this task) and **Background** (context, collapsed). Every value links to
 the sentence it came from, shown highlighted in its letter. Facts the letters don't contain
@@ -43,7 +43,7 @@ word. At request time the model only *chooses* from facts already checked, and c
 every number, drug, side and date before it's shown. A chat bar answers follow-up questions
 with sources. Results on the 5 challenge situations: 15/15 correct answers, 100% traceable
 sources (278/278), 0 invented facts, 8 real contradictions found and no false alarms, first
-response 1.8 s at worst.
+response 1.8 s at worst (median 117 ms).
 
 ## Tech used
 

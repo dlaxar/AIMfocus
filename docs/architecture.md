@@ -1,7 +1,7 @@
 # Technical architecture
 
 How AIMfocus turns eight German clinical letters into one role-specific, fully sourced
-screen in about five seconds. For the product view, see the [README](../README.md).
+screen. For the product view, see the [README](../README.md).
 
 **Core principle: slow and thorough offline, fast and constrained at runtime.** Everything
 that needs careful reading of the letters happens once per patient, ahead of time. At
@@ -81,7 +81,7 @@ sequenceDiagram
         API->>O: same, effort low
     end
     C->>API: PUT /screens/id/patient
-    Note over API: plan applied to the patient's<br/>fact store in code (~5 ms)
+    Note over API: plan applied to the patient's<br/>fact store in code
     API-->>C: SSE screen: documented cards, status partial
     API->>H: derive (fp_derive), one call per card<br/>the fact store cannot answer
     API-->>C: SSE screen: text-search results, status complete
@@ -117,7 +117,7 @@ Screens and chats live in memory in a single process – enough for the prototyp
 
 ### Chat
 
-`POST /api/v2/chat/stream` answers a follow-up question in about 2 s. The fixed part of the
+`POST /api/v2/chat/stream` answers a follow-up question. The fixed part of the
 prompt (rules, the fact store under short handles, the full text of all letters) is the same
 for every question and is sent as a cached prefix, so a question costs little more than its
 own tokens. The model names the facts and passages it used; code checks them the same way
@@ -167,9 +167,9 @@ Google. All prompts are versioned Markdown files in `core/app/llm/prompts/`:
 | `chat` | Follow-up questions |
 | `r1_planner`, `r2_answerer` | The earlier runtime (`POST /api/screen`), kept for comparison |
 
-Model choice was measured, not guessed: Gemini flash models were faster (under 3 s) but
-answered fewer questions correctly; Gemini models with more thinking reached 15/15 but took
-10–14 s. Claude Haiku 5.5 without thinking gave the best balance. The measurements are kept
+Model choice was measured, not guessed: Gemini flash models were faster but
+answered fewer questions correctly; Gemini models with more thinking reached 15/15 but were
+much slower. Claude Haiku 5.5 without thinking gave the best balance. The measurements are kept
 as comments in `core/app/config.py`.
 
 ## Data and storage

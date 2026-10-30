@@ -44,10 +44,7 @@ compare with the previous screen in the frontend if changes should be highlighte
 - Fetched after Opus is done (e.g. once the patient is picked): `GET /api/v2/screens/<id>` returns the Opus screen at once.
 - Still running: the SSE stream sends the fast screen as it fills, then the Opus screen as one more `event: screen`, then `event: done`. The stream ends only when `upgrade` is no longer `running`.
 - `?wait=true` waits for the fast screen; `?wait=true&final=true` also for the Opus screen.
-- Opus takes about 8–12 s per screen; chat cards stay on the fast model.
-
-Typical timings with the default model (Claude Haiku 5.5): first items after 2–4 s, complete
-screen after 3–7 s.
+- Opus takes longer than the fast model; chat cards stay on the fast model.
 
 ## 2. Screen
 
@@ -371,7 +368,7 @@ POST /api/v2/chat
 }
 ```
 
-About 2 s per answer. The chat knows the session's screen and the conversation, answers in the
+The chat knows the session's screen and the conversation, answers in the
 language of the question, names contradictions, and gives no treatment advice. Errors: `400`
 empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
 `GET /api/v2/chat/<chat_id>`.
@@ -388,8 +385,8 @@ store lacks is searched in the letters (so questions about details that are not 
 work too), and a check that is missing comes back as `state: "not_documented"` with
 `headline.text: "Not documented"`. Render the cards with the screen renderers.
 
-**Recommended: one stream.** Nothing waits for the slowest part; later results may come after
-10 s, the first ones come at once.
+**Recommended: one stream.** Nothing waits for the slowest part: the first results come at once,
+later ones as they are ready.
 
 ```
 POST /api/v2/chat/stream
@@ -400,16 +397,15 @@ Server-sent events, in the order they are ready:
 
 | Event | When | `data` |
 |---|---|---|
-| `answer` | text ready, ~1.5 s | the chat reply (`chat_id`, `answer`, `state`, `sources`, `fact_ids`, `cards_screen_id`) – same as section 7 |
-| `cards` | first after ~1.5–3 s, again on every change | `{chat_id, cards_screen_id, cards_status, cards: [ScreenVariable…], elapsed_ms}` – always the **full** current list; replace what you show. Cards from the fact store come first; `pending` cards fill in when the text search is done |
+| `answer` | text ready | the chat reply (`chat_id`, `answer`, `state`, `sources`, `fact_ids`, `cards_screen_id`) – same as section 7 |
+| `cards` | first list ready, again on every change | `{chat_id, cards_screen_id, cards_status, cards: [ScreenVariable…], elapsed_ms}` – always the **full** current list; replace what you show. Cards from the fact store come first; `pending` cards fill in when the text search is done |
 | `done` | everything finished | `{elapsed_ms}` |
 | `error` | the text answer failed | `{detail}` (cards may still follow) |
 
 `answer` and the first `cards` can come in either order. `"cards": false` streams only `answer`
 and `done`. Pass `chat_id` from the `answer` event with the next question for follow-ups.
 
-Measured through the former Flask gateway (Haiku 5.5): text 1.5–2.6 s, first cards 1.3–3.0 s, done
-within 4.5 s; e.g. "What did the rectal examination show?" (not a stored fact) → a `list` card
+Examples (Haiku 5.5): "What did the rectal examination show?" (not a stored fact) → a `list` card
 from the letter text; "Is a CPAP therapy documented?" → `not_documented` card.
 
 **Without streaming** – `POST /api/v2/chat` with `"cards": true`:
@@ -456,8 +452,7 @@ Examples from the live test (Haiku 5.5, 12 questions × 2 runs, all as expected)
 | Is her kidney function documented? | `value`, `state: "not_documented"` |
 | Since when? (follow-up to the blood thinner) | `list` with the aspirin start in 2015 |
 
-Timing with `wait: true`: text answer about 1.6 s on average; the reply with cards about 2.5 s
-(single outliers up to about 12 s when a text search is slow – the stream avoids that wait).
+With `wait: true` the reply waits for the slowest card; the stream avoids that wait.
 
 ## 8. Rendering checklist
 
@@ -549,10 +544,10 @@ patient changes nothing; a chat started for the earlier patient continues as a n
 (Haiku and Opus) start at once: the selection for the default patient, and the same screen
 *planned without any patient* (which cards the role needs, and how to recognise their facts:
 fact types, terms, measurement keys, derived facts). Picking the default patient keeps the
-screen as it is. Picking another patient applies the plans to that patient's facts in code
-(about 5 ms): the documented cards are there at once, only the text search for cards that
+screen as it is. Picking another patient applies the plans to that patient's facts in code:
+the documented cards are there at once, only the text search for cards that
 patient's facts cannot fill runs (and streams in), and the Opus screen follows when its plan
-is applied. If the patient is picked before a plan is ready (it takes about 4–6 s), the cards
+is applied. If the patient is picked before a plan is ready, the cards
 appear as soon as it is.
 
 Unknown patient: `404`. Chat with a `patient_id` that differs from its screen's patient: `400`.

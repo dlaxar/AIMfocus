@@ -190,11 +190,11 @@ eval situations (93 questions, `eval/score_runs.py`).
 | Store from `fhir.json` vs. JSON files | identical in every field, fact sheet identical to the character; load 25 ms vs 7 ms |
 | Codes | 117 of 120 IBM mentions matched to our facts; ICD-10 / ATC on 150–158 facts; LOINC table (10 codes) checked on loinc.org |
 | `--from s3` with only `fhir.json` present | earlier stages restored, S3/S4 rerun, bundle rewritten |
-| Eval, JSON store | 86/93 (mean 4.3 s, max 7.9 s) |
-| Eval, same cache from `fhir.json` | 86/93 (mean 4.4 s, max 8.4 s) |
-| Fresh ingestion straight into `fhir.json`, eval on it | 87/93 (mean 4.6 s, max 7.6 s); ingestion 5 min 15 s |
-| After merging main (stricter prompt), `fhir.json` | 90/93 (mean 5.8 s); one screen at 10.9 s from a slow select call – the same situation repeated 4× gave 4.7–8.7 s on FHIR and 4.0–8.1 s on JSON |
-| Chat stream with cards, FHIR mode, through the former Flask gateway | 6/6 questions; text 1.5–3.6 s, first cards 1.1–3.2 s |
+| Eval, JSON store | 86/93 |
+| Eval, same cache from `fhir.json` | 86/93 |
+| Fresh ingestion straight into `fhir.json`, eval on it | 87/93; ingestion 5 min 15 s |
+| After merging main (stricter prompt), `fhir.json` | 90/93 |
+| Chat stream with cards, FHIR mode, through the former Flask gateway | 6/6 questions |
 
 ### Official HL7 FHIR Validator
 

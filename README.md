@@ -4,8 +4,8 @@
 
 AIMfocus gives every clinician one screen with exactly the patient facts their task needs –
 and shows where each fact comes from. You say who you are and what you are about to do
-(*"Anaesthetist, pre-op check before the breast operation"*), pick the patient, and within
-about five seconds you see her blood thinner and dose, her contrast-media allergy and her last
+(*"Anaesthetist, pre-op check before the breast operation"*), pick the patient, and you see
+her blood thinner and dose, her contrast-media allergy and her last
 heart ultrasound – each linked to the sentence in the letter it came from. The tumour's
 receptor status is left out, because it does not matter for anaesthesia.
 
@@ -99,8 +99,8 @@ the fast one a few seconds later); offline fact extraction uses Gemini by defaul
   verification ("check")
 
 **Follow-up questions**
-- A chat bar under the screen: ask anything about the patient and get a short answer in about
-  two seconds, with sources, plus up to two extra cards rendered like the screen
+- A chat bar under the screen: ask anything about the patient and get a short answer with
+  sources, plus up to two extra cards rendered like the screen
 - Follow-up questions keep the conversation context; English questions get English answers,
   German questions German ones
 
