@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "passages",
+  "url": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/passages",
+  "name": "Passages",
+  "title": "The document's passages as JSON",
+  "status": "draft",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DocumentReference"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "description": "Passages (id, offsets, kind, section, copy_of) that facts point into.",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "The document's passages as JSON",
+        "definition": "Passages (id, offsets, kind, section, copy_of) that facts point into.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://oachkatzlschwoaf.example/fhir/StructureDefinition/passages"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

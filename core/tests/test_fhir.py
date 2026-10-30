@@ -132,3 +132,17 @@ class TestIbmCodes:
 
     def test_no_ibm_files_means_no_codes(self, tmp_path):
         assert ibm_codes(tmp_path, "P", [], [])[0] == {}
+
+
+class TestOfficialValidator:
+    """Runs the HL7 FHIR Validator when it is installed (FHIR_VALIDATOR_JAR or ~/tools/validator_cli.jar)."""
+
+    def test_fixture_bundle_has_no_errors(self, fixture_cache, tmp_path):
+        import os
+        from preprocess.validate_fhir import _jar, validate
+        if not os.path.exists(_jar()):
+            pytest.skip("HL7 FHIR Validator not installed")
+        path = tmp_path / "fhir.json"
+        fhir.save(fixture_cache, path)
+        result = validate(path)
+        assert result["errors"] == []

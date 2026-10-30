@@ -8,6 +8,7 @@ round trip is lossless and independent of FHIR's status vocabularies.
 from __future__ import annotations
 
 import base64
+import html
 import re
 from typing import Any, Optional
 
@@ -33,7 +34,7 @@ def _date(value: Optional[str]) -> Optional[str]:
 
 
 def _cc(text: str, codings: list[dict] = ()) -> dict:
-    cc: dict[str, Any] = {"text": text}
+    cc: dict[str, Any] = {"text": str(text).strip()}
     if codings:
         cc["coding"] = list(codings)
     return cc
@@ -107,11 +108,38 @@ def _body_site(fact: dict) -> Optional[dict]:
     return {"coding": [{"system": SNOMED, "code": hit[0], "display": hit[1]}], "text": hit[1].lower()} if hit else None
 
 
+# Units as written in the letters → UCUM (the FHIR vital-signs profiles require system + code)
+_UCUM = {"kg": "kg", "g": "g", "cm": "cm", "m": "m", "mm": "mm", "%": "%", "mmhg": "mm[Hg]", "°c": "Cel", "c": "Cel",
+         "/min": "/min", "1/min": "/min", "bpm": "/min", "/min.": "/min", "kg/m2": "kg/m2", "kg/m²": "kg/m2",
+         "cm/s": "cm/s", "cm/sec": "cm/s", "mg/dl": "mg/dL", "mmol/l": "mmol/L", "ml": "mL"}
+_DEFAULT_UNIT = {"C:meas:bmi": "kg/m2"}
+# Measurements under the FHIR vital-signs profiles; the rest are exam or laboratory observations
+VITAL_SIGNS = {"C:meas:body_weight", "C:meas:body_height", "C:meas:bmi", "C:meas:blood_pressure",
+               "C:meas:heart_rate", "C:meas:temperature"}
+LABORATORY = {"C:meas:hba1c"}
+
+
+def _quantity(value: str, unit: str) -> dict:
+    q: dict[str, Any] = {"value": float(value.replace(",", "."))}
+    if unit:
+        q["unit"] = unit
+        code = _UCUM.get(unit.strip().lower())
+        if code:
+            q.update(system=UCUM, code=code)
+    return q
+
+
+def is_numeric(fact: dict) -> bool:
+    raw = str((fact.get("fields") or {}).get("value", "")).strip()
+    parts = [p.strip() for p in raw.split("/")] if "/" in raw else [raw]
+    return len(parts) in (1, 2) and all(_NUMBER.match(p) for p in parts)
+
+
 def _value(fact: dict) -> dict:
     """valueQuantity for a number, components for blood pressure, else valueString."""
     fields = fact.get("fields") or {}
     raw = str(fields.get("value", "")).strip()
-    unit = str(fields.get("unit", "") or "")
+    unit = str(fields.get("unit", "") or "") or _DEFAULT_UNIT.get(fact.get("concept_id") or "", "")
     if "/" in raw:
         parts = [p.strip() for p in raw.split("/")]
         if len(parts) == 2 and all(_NUMBER.match(p) for p in parts):
@@ -122,17 +150,17 @@ def _value(fact: dict) -> dict:
                  "valueQuantity": {"value": float(parts[1].replace(",", ".")), "unit": unit or "mmHg", "system": UCUM, "code": "mm[Hg]"}},
             ]}
     if _NUMBER.match(raw):
-        q: dict[str, Any] = {"value": float(raw.replace(",", "."))}
-        if unit:
-            q["unit"] = unit
-        return {"valueQuantity": q}
-    return {"valueString": fact.get("en") or fact.get("span") or ""}
+        return {"valueQuantity": _quantity(raw, unit)}
+    return {"valueString": (fact.get("en") or fact.get("span") or "").strip()}
 
 
 def fact_resource(fact: dict, patient_ref: dict, concept_label: Optional[str], codes: list[dict]) -> dict:
     ftype, status, date = fact["type"], fact.get("status", "unknown"), _date(fact.get("date"))
     rtype = RESOURCE_FOR_TYPE.get(ftype, "Observation")
-    extra = list(codes) + (loinc_coding(fact.get("concept_id")) if ftype == "measurement" else [])
+    # LOINC (and with it the vital-signs profile) only for a single value or a blood pressure
+    # pair; "47 - 100 (67) /min" from a Holter stays an exam observation with its text
+    vital = ftype == "measurement" and fact.get("concept_id") in VITAL_SIGNS and is_numeric(fact)
+    extra = list(codes) + (loinc_coding(fact.get("concept_id")) if ftype == "measurement" and is_numeric(fact) else [])
     r: dict[str, Any] = {"resourceType": rtype, "id": fhir_id(fact["fact_id"]), "meta": stage_tag("s1"),
                          "extension": [json_extension(ORIGINAL, fact)]}
     code = _code(fact, concept_label, extra)
@@ -152,7 +180,7 @@ def fact_resource(fact: dict, patient_ref: dict, concept_label: Optional[str], c
         if site:
             r["bodySite"] = [site]
     elif rtype == "Observation":
-        category = {"measurement": "vital-signs", "finding": "exam", "demographic": "social-history"}.get(ftype, "exam")
+        category = ("vital-signs" if vital else "laboratory" if fact.get("concept_id") in LABORATORY else "exam")             if ftype == "measurement" else {"finding": "exam", "demographic": "social-history"}.get(ftype, "exam")
         r.update(status="final", subject=patient_ref, code=code,
                  category=[_status_cc("observation-category", category)])
         if date:
@@ -161,7 +189,7 @@ def fact_resource(fact: dict, patient_ref: dict, concept_label: Optional[str], c
             r["bodySite"] = site
         if status == "negative":
             r["interpretation"] = [_status_cc("v3-ObservationInterpretation", "NEG")]
-        r.update(_value(fact) if ftype == "measurement" else {"valueString": fact.get("en") or fact.get("span") or ""})
+        r.update(_value(fact) if ftype == "measurement" else {"valueString": (fact.get("en") or fact.get("span") or "").strip()})
     elif rtype == "MedicationStatement":
         r.update(subject=patient_ref, medicationCodeableConcept=code, status={
             "current": "active", "started": "active", "changed": "active", "discontinued": "stopped", "historical": "completed",
@@ -246,4 +274,17 @@ def detected_issue(cx: Optional[dict], report: Optional[dict], patient_ref: dict
         r["extension"].append(json_extension(REPORT, report))
     if implicated:
         r["implicated"] = implicated
+    return r
+
+
+def with_narrative(r: dict) -> dict:
+    """A short human-readable text (FHIR recommends one on every resource, dom-6)."""
+    if r["resourceType"] in ("Binary", "Bundle"):
+        return r
+    summary = ((r.get("code") or r.get("medicationCodeableConcept") or {}).get("text") or r.get("description")
+               or r.get("detail") or (r.get("name") or [{}])[0].get("text") if isinstance(r.get("name"), list) else None)         or r.get("title") or r.get("name") or r["id"]
+    value = r.get("valueString") or (f"{r['valueQuantity'].get('value')} {r['valueQuantity'].get('unit', '')}".strip()
+                                     if r.get("valueQuantity") else "")
+    text = f"{summary}: {value}" if value and value != summary else str(summary)
+    r["text"] = {"status": "generated", "div": f'<div xmlns="http://www.w3.org/1999/xhtml">{html.escape(text)}</div>'}
     return r

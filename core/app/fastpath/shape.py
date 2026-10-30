@@ -49,7 +49,7 @@ def _cx_ids(fact_id: Optional[str], store: FactStore) -> list[str]:
     return [cx.contradiction_id for cx in store.contradictions if fact_id and fact_id in cx.fact_ids]
 
 
-_SYSTEM_NAMES = {"http://hl7.org/fhir/sid/icd-10": "ICD-10", "http://www.whocc.no/atc": "ATC", "http://loinc.org": "LOINC"}
+_SYSTEM_NAMES = {"http://fhir.de/CodeSystem/bfarm/icd-10-gm": "ICD-10-GM", "http://hl7.org/fhir/sid/icd-10": "ICD-10", "http://www.whocc.no/atc": "ATC", "http://loinc.org": "LOINC"}
 
 
 def _codes(fact_id: Optional[str], store: FactStore) -> list[Coding]:

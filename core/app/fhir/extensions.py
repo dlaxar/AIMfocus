@@ -16,7 +16,8 @@ REPORT = f"{BASE}/StructureDefinition/contradiction-report" # the finder's full 
 STAGE_SYSTEM = f"{BASE}/CodeSystem/pipeline-stage"          # meta.tag: which stage created a resource
 CONCEPT_SYSTEM = f"{BASE}/CodeSystem/concepts"              # our concept IDs
 
-ICD10 = "http://hl7.org/fhir/sid/icd-10"
+# IBM codes diagnoses with ICD-10-GM (German modification, e.g. M81.99, not in WHO ICD-10)
+ICD10 = "http://fhir.de/CodeSystem/bfarm/icd-10-gm"
 ATC = "http://www.whocc.no/atc"
 LOINC = "http://loinc.org"
 SNOMED = "http://snomed.info/sct"

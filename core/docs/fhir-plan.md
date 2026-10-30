@@ -194,8 +194,22 @@ eval situations (93 questions, `eval/score_runs.py`).
 | After merging main (stricter prompt), `fhir.json` | 90/93 (mean 5.8 s); one screen at 10.9 s from a slow select call – the same situation repeated 4× gave 4.7–8.7 s on FHIR and 4.0–8.1 s on JSON |
 | Chat stream with cards, FHIR mode, through the backend | 6/6 questions; text 1.5–3.6 s, first cards 1.1–3.2 s |
 
-Not done: the official HL7 FHIR Validator (`validator_cli.jar`, Java) – downloading and running
-it needs a permission in this environment. To run it locally:
-`java -jar validator_cli.jar cache/0000-0001/fhir.json -version 4.0.1` (expect warnings for our
-unprofiled extensions).
+### Official HL7 FHIR Validator
 
+`python -m preprocess.validate_fhir` runs `validator_cli.jar` (HL7 / HAPI, Java 17+) against
+R4 4.0.1 with our extension definitions (`app/fhir/ig/`) and the patient's concept CodeSystem.
+Result for patient 0000-0001: **0 errors**, 233 warnings, 439 information messages.
+
+| Warning | Count | Why it stays |
+|---|---|---|
+| Observations should have a performer | 201 | the letters do not say who measured |
+| Code system definition not found | 31 | ICD-10-GM and ATC are not in the validator's terminology; it notes the CodeableConcept is still valid |
+| Observation should have effective[x] | 1 | one finding without any date in the letter |
+
+Fixed on the way (first run: 584 errors): our extensions now have StructureDefinitions;
+vital signs carry UCUM units (kg, cm, kg/m2, Cel, /min, mm[Hg]) as the vital-signs profiles
+require, and only single values get a vital-signs LOINC (a Holter range stays an exam
+observation); HbA1c is a laboratory observation; IBM's diagnosis codes are ICD-10-GM
+(`http://fhir.de/CodeSystem/bfarm/icd-10-gm` – M81.99 does not exist in WHO ICD-10); every
+resource has a short narrative. `tests/test_fhir.py` runs the validator on the fixture bundle
+when it is installed.

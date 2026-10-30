@@ -141,6 +141,7 @@ def to_bundle(cache: Cache) -> dict:
     if empty:
         resources.append(mapping.binary("empty-artifacts", "s0", empty))
 
+    resources = [mapping.with_narrative(r) for r in resources]
     ids = [f"{r['resourceType']}/{r['id']}" for r in resources]
     dupes = {i for i in ids if ids.count(i) > 1}
     if dupes:

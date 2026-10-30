@@ -180,9 +180,10 @@ class FactStore:
     @staticmethod
     def _standard_codes(raw_facts: list[dict], raw_passages: list[dict], patient_id: str) -> dict[str, list[dict]]:
         from app.fhir.codes import ibm_codes, loinc_coding
+        from app.fhir.mapping import is_numeric
         codes, _stats = ibm_codes(settings.DATA_DIR, patient_id, raw_facts, raw_passages)
         for f in raw_facts:
-            if f.get("type") == "measurement" and loinc_coding(f.get("concept_id")):
+            if f.get("type") == "measurement" and is_numeric(f) and loinc_coding(f.get("concept_id")):
                 codes[f["fact_id"]] = codes.get(f["fact_id"], []) + loinc_coding(f.get("concept_id"))
         return codes
 
