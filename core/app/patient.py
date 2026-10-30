@@ -12,8 +12,8 @@ from app.runtime.screen import _best_passage_id, _build_source
 from app.store import FactStore
 
 
-def _patient_json() -> dict:
-    for name in (settings.PATIENT_ID, f"patient-{settings.PATIENT_ID}"):
+def patient_json(patient_id: str) -> dict:
+    for name in (patient_id, f"patient-{patient_id}"):
         path = settings.DATA_DIR / name / "patient.json"
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
@@ -46,7 +46,7 @@ def _latest(store: FactStore, concept_id: str, reference_date: str) -> Optional[
 
 
 def build_profile(store: FactStore) -> dict[str, Any]:
-    info = _patient_json()
+    info = patient_json(store.patient_id)
     ref = store.reference_date() or ""
     birth = info.get("dateOfBirth") or (store.derived.get("D:age").fields.get("birth_date") if store.derived.get("D:age") else None)
 
@@ -63,12 +63,15 @@ def build_profile(store: FactStore) -> dict[str, Any]:
     bmi = next((d for d in sorted(store.derived.values(), key=lambda d: d.date or "", reverse=True)
                 if d.formula and "height" in d.formula and (not ref or (d.date or "") <= ref)), None)
     return {
-        "patient_id": info.get("id") or settings.PATIENT_ID,
+        "patient_id": store.patient_id,
         "name": info.get("name"),
         "sex": info.get("sex"),
         "birth_date": birth,
         "age": _age(birth, ref),                       # on the reference date ("now" for the record)
         "reference_date": ref or None,
+        "deceased": info.get("deceased"),
+        "source": info.get("source", "ibm"),
+        "images": len(store.images),
         "allergies": list(allergies.values()),
         "height": _latest(store, "C:meas:body_height", ref),
         "weight": _latest(store, "C:meas:body_weight", ref),

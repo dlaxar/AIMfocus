@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 from app.fhir import mapping
 from app.fhir.codes import ibm_codes
-from app.fhir.extensions import ATC, ICD10, LOINC, ORIGINAL, PASSAGES, REPORT, read_json_extension, stage_of, stage_tag
+from app.fhir.extensions import ATC, ICD10, LOINC, RXNORM, SNOMED, ORIGINAL, PASSAGES, REPORT, read_json_extension, stage_of, stage_tag
 from app.fhir.ids import fhir_id
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _BINARY = ("facts.raw", "s1_report", "s1_aliases", "manifest")
 # Binary resource id → artifact name ("s1_report" is stored as "artifact-s1-report")
 _BINARY_NAMES = {fhir_id(f"artifact-{n}"): n for n in (*_BINARY, "empty-artifacts")}
 STAGES = ["s0", "s1", "s2", "s3", "s4"]
-STANDARD_SYSTEMS = (ICD10, ATC, LOINC)
+STANDARD_SYSTEMS = (ICD10, ATC, LOINC, SNOMED, RXNORM)
 
 
 @dataclass
@@ -70,7 +70,19 @@ def from_json_dir(out_dir: Path, patient_id: str, data_dir: Optional[Path] = Non
         if "facts" in cache.data and "passages" in cache.data:
             cache.codes, stats = ibm_codes(data_dir, patient_id, cache.data["facts"], cache.data["passages"])
             logger.info("FHIR codes from IBM: %s", stats)
+    for f in cache.data.get("facts", []):   # imported FHIR facts carry their own codes
+        own = source_codings(f)
+        if own:
+            cache.codes[f["fact_id"]] = cache.codes.get(f["fact_id"], []) + own
     return cache
+
+
+def source_codings(fact: dict) -> list[dict]:
+    """Standard codings a fact brought from its source (fields.codings of an imported FHIR resource).
+    System and code only: Synthea's display texts are not the code systems' own (the HL7
+    validator rejects them); the fact's text keeps the name."""
+    return [{k: c[k] for k in ("system", "code") if k in c}
+            for c in (fact.get("fields") or {}).get("codings", []) if c.get("system") in STANDARD_SYSTEMS]
 
 
 def to_json_dir(cache: Cache, out_dir: Path) -> list[str]:

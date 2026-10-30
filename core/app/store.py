@@ -39,6 +39,8 @@ class FactStore:
         self.fact_sheet: str = ""
         self.manifest: Optional[CacheManifest] = None
         self.codes: dict[str, list[dict]] = {}   # fact_id → standard codings (ICD-10, ATC, LOINC)
+        self.patient_id: str = ""
+        self.images: dict[str, dict] = {}       # image_id → DICOM file, preview, volume size
 
         # Reverse indices
         self._passage_by_doc: dict[str, list[str]] = {}     # doc_id → [passage_id]
@@ -51,6 +53,9 @@ class FactStore:
 
     def load(self, cache_dir: Path, patient_id: str) -> None:
         out_dir = cache_dir / patient_id
+        self.patient_id = patient_id
+        from app import images
+        self.images = images.catalogue(cache_dir, patient_id)   # image_id → DICOM file and preview
         fhir_path = out_dir / "fhir.json"
         self.source = "json"
         if settings.CACHE_FORMAT != "json" and fhir_path.exists():
@@ -181,7 +186,11 @@ class FactStore:
     def _standard_codes(raw_facts: list[dict], raw_passages: list[dict], patient_id: str) -> dict[str, list[dict]]:
         from app.fhir.codes import ibm_codes, loinc_coding
         from app.fhir.mapping import is_numeric
+        from app.fhir.cache import source_codings
         codes, _stats = ibm_codes(settings.DATA_DIR, patient_id, raw_facts, raw_passages)
+        for f in raw_facts:
+            if source_codings(f):
+                codes[f["fact_id"]] = codes.get(f["fact_id"], []) + source_codings(f)
         for f in raw_facts:
             if f.get("type") == "measurement" and is_numeric(f) and loinc_coding(f.get("concept_id")):
                 codes[f["fact_id"]] = codes.get(f["fact_id"], []) + loinc_coding(f.get("concept_id"))
@@ -201,9 +210,10 @@ class FactStore:
         ref = self.reference_date()
         for p in self.passages.values():
             m = re.search(r"\bgeb(?:oren|\.)?\s*(?:am\s*)?(\d{1,2})\.(\d{1,2})\.(\d{4})", p.text)
-            if not m or not ref:
+            iso = None if m else re.search(r"\bborn\s+(\d{4})-(\d{2})-(\d{2})", p.text)   # imported FHIR record
+            if not (m or iso) or not ref:
                 continue
-            d, mo, y = int(m[1]), int(m[2]), int(m[3])
+            d, mo, y = (int(m[1]), int(m[2]), int(m[3])) if m else (int(iso[3]), int(iso[2]), int(iso[1]))
             ry, rm, rd = (int(x) for x in ref[:10].split("-"))
             age = ry - y - ((rm, rd) < (mo, d))
             return DerivedFact(
@@ -227,18 +237,41 @@ class FactStore:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_store: Optional[FactStore] = None
+# One store per patient, loaded on first use; the default patient (PATIENT_ID) at startup
+_stores: dict[str, FactStore] = {}
+_store: Optional[FactStore] = None   # the default patient's store (kept for older callers)
 
 
-def get_store() -> FactStore:
-    global _store
+class UnknownPatient(LookupError):
+    pass
+
+
+def get_store(patient_id: Optional[str] = None) -> FactStore:
+    pid = patient_id or settings.PATIENT_ID
     if _store is None:
         raise RuntimeError("FactStore not initialised. Call load_store() first.")
-    return _store
+    if pid not in _stores:
+        if pid not in available_patients():
+            raise UnknownPatient(pid)
+        load_store(pid)
+    return _stores[pid]
 
 
-def load_store() -> FactStore:
+def load_store(patient_id: Optional[str] = None) -> FactStore:
+    """(Re)load one patient's store from cache/<patient>/ (fhir.json or the JSON files)."""
     global _store
-    _store = FactStore()
-    _store.load(settings.CACHE_DIR, settings.PATIENT_ID)
-    return _store
+    pid = patient_id or settings.PATIENT_ID
+    store = FactStore()
+    store.load(settings.CACHE_DIR, pid)
+    _stores[pid] = store
+    if pid == settings.PATIENT_ID:
+        _store = store
+    return store
+
+
+def available_patients() -> list[str]:
+    """Patients with a cache (cache/<id>/manifest.json or fhir.json)."""
+    if not settings.CACHE_DIR.exists():
+        return []
+    return sorted(d.name for d in settings.CACHE_DIR.iterdir()
+                  if d.is_dir() and ((d / "manifest.json").exists() or (d / "fhir.json").exists()))

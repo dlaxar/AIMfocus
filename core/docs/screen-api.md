@@ -9,7 +9,8 @@ OpenAPI document: `http://127.0.0.1:8001/openapi.json` (browsable at `/docs`).
 
 | Step | Call | Returns |
 |---|---|---|
-| Clinician enters the situation | `GET /api/session/get?situation=<base64 UTF-8>` | `{session_id, screen}` at once; `screen.status = "starting"` |
+| Clinician enters the situation | `GET /api/session/get?situation=<base64 UTF-8>[&patient=<id>]` | `{session_id, screen}` at once; `screen.status = "starting"` (default patient: the IBM patient; section 10) |
+| Patient picked after the situation | `POST /api/session/<id>/patient` `{"patient_id": …}` | a new `{session_id, screen}`: the same situation for that patient |
 | Screen fills in (while the patient is picked) | `GET /api/session/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
 | … or poll | `GET /api/session/<id>` · `?wait=true` blocks until complete | the screen |
 | Short card title | `GET /api/session/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
@@ -71,7 +72,7 @@ One card on the screen. The model decides **what** to show, its **priority**, **
 | `derived` | found by the text search in a letter (quote checked) | normal, maybe a "from text" hint |
 | `not_documented` | the letters do not contain it – a valid, often important answer | "Not documented" |
 | `check` | an answer existed but failed verification | show with a warning |
-| `not_available` | `output: image` – the documents contain no images | placeholder |
+| `not_available` | `output: image` – the record holds no images | placeholder |
 
 ```jsonc
 // Headline – detail level 1
@@ -178,7 +179,22 @@ recommendations, `open` / `done` (follow-up checked against all later letters).
 
 #### `image`
 
-`state: "not_available"`, `headline.text: "No images in the documents"`. Show a placeholder.
+One item per imaging study that has an image, newest first, like a `list`. The image is in
+the item's source: `items[].source.image` (an `ImageRef`, section 4). Show
+`image.preview_url` (axial, coronal and sagittal middle slices side by side) and let a click
+scroll through `image.slice_url` (section 10).
+
+```jsonc
+{
+  "name": "brain_mri", "label": "Brain MRI", "state": "documented", "output": "image",
+  "headline": {"text": "MRI of the head – image available", "date": "2015-03-02"},
+  "items": [{"fact_id": "F:coh-972f6a59-imaging:pro:001", "text": "MRI of the head – image available",
+             "date": "2015-03-02", "source": {…, "image": ImageRef}}]
+}
+```
+
+A patient without images (the IBM patient: letters only) gets `state: "not_available"`,
+`headline.text: "No images in the record"`. Show a placeholder.
 
 ### Older flat fields
 
@@ -190,7 +206,15 @@ are still sent for existing code. New code should use the fields above.
 ```jsonc
 // Source – a passage in a letter; enough to open the letter and highlight it
 {"doc_id": "12340018", "doc_title": "Stat. Patientenbrief (Interne)", "doc_date": "2016-04-15",
- "passage_id": "12340018:p012", "start": 812, "end": 880, "quote_de": "…German text of the passage…"}
+ "passage_id": "12340018:p012", "start": 812, "end": 880, "quote_de": "…German text of the passage…",
+ "image": null}                     // ImageRef when the passage is an imaging study with an image
+
+// ImageRef – an image of the patient (DICOM), with ready-to-use links (gateway paths)
+{"image_id": "1.2.840.99999999.45903353.1425326050498", "modality": "MR", "body_site": "Head",
+ "date": "2015-03-02", "frames": 256,
+ "preview_url": "/api/patients/coh-972f6a59/images/1.2.840…/preview.png",
+ "slice_url": "/api/patients/coh-972f6a59/images/1.2.840…/slice.png",
+ "dicom_url": "/api/patients/coh-972f6a59/images/1.2.840…/dicom"}
 
 // Entry – value, history row, list item, or a value found by the text search (fact_id null)
 {"fact_id": "F:…" | null, "text": "…", "date": "YYYY-MM-DD" | null, "status": "…" | null,
@@ -308,6 +332,9 @@ About 2 s per answer. The chat knows the session's screen and the conversation, 
 language of the question, names contradictions, and gives no treatment advice. Errors: `400`
 empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
 `GET /api/v2/chat/<chat_id>` on the core.
+
+The chat asks about the patient of its session; sources of an imaging study carry
+`source.image` like screen entries do.
 
 ### Chat with cards (streamed)
 
@@ -432,5 +459,37 @@ GET /api/patients/0000-0001/profile
 Any field can be `null` (or `[]` for `allergies`) when it is not documented. An empty
 `allergies` list means no allergy is documented – show "no known allergies documented",
 not "no allergies". The patient search (`/api/patients/search`, `/api/patients/<id>`) is
-separate and unchanged.
+separate and unchanged; it now also finds the imported FHIR patients.
+
+Also in the header: `deceased` (date or `null`), `source` (`"ibm"` letters or `"fhir"`
+imported record) and `images` (how many images the patient has).
+
+## 10. Several patients and images
+
+Besides the IBM patient, the core holds patients imported from FHIR R4 bundles (Synthea /
+MITRE Coherent data set: coded conditions, medication, observations, procedures, care plans,
+clinical notes, and a DICOM MRI of the head each). Every route works for every patient.
+
+| What | Call | Returns |
+|---|---|---|
+| Patients with data | `GET /api/patients/available` | `[{patient_id, name, sex, birth_date, source, images, default}]` |
+| Screen for a patient | `GET /api/session/get?situation=…&patient=<id>` | as section 1; `screen.patient_id` says whose |
+| Chat | as section 7 | follows the session's patient |
+| Source letter / record section | `GET /api/documents/<doc_id>?patient=<id>` (also `/original`, `/api/passages/<id>/original`) | as section 6 |
+| A patient's images | `GET /api/patients/<id>/images` | `[ImageRef + {fact_id, title, rows, columns}]` |
+| Quick preview | `GET /api/patients/<id>/images/<image_id>/preview.png` | PNG: axial · coronal · sagittal middle slice |
+| One slice | `GET /api/patients/<id>/images/<image_id>/slice.png?axis=axial&index=120` | PNG; header `X-Slice-Count` = slices on that axis; no `index` = middle |
+| The DICOM file | `GET /api/patients/<id>/images/<image_id>/dicom` | `application/dicom` |
+
+`axis` is `axial`, `coronal` or `sagittal`; `index` runs from 0 to `X-Slice-Count − 1` (out of
+range is clamped). A slice takes about 0.05 s once the volume is loaded (first one ≈ 0.4 s).
+Grey levels are windowed to the 1st–99.5th percentile.
+
+An imported record has no letters: its "documents" are the record's sections (`FHIR record –
+Conditions`, `– Medications`, `– Observations`, `– Imaging`, …) with one passage per line, plus
+the newest clinical notes. Sources point into them exactly as into a letter. `quote_de` then
+holds English text (the field name is kept for existing code). Codes are the record's own
+(SNOMED CT, RxNorm, LOINC).
+
+Unknown patient: `404`. Chat with a `patient_id` that differs from its session's patient: `400`.
 

@@ -1,6 +1,8 @@
 """
 app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
 
+  Every route takes an optional patient_id (query, or in the POST body); default PATIENT_ID.
+
   GET  /api/v2/schema                     fact-store structure (types, fields, concepts)
   GET  /api/v2/concepts[?type=]           concepts, optionally filtered by fact type
   GET  /api/v2/concepts/{concept_id}      one concept with its facts and sources
@@ -22,9 +24,17 @@ from app.fastpath import service
 from app.fastpath.models import FastScreen, ScreenRequest
 from app.runtime.screen import _best_passage_id, _build_source
 from app.schemas import Fact
-from app.store import get_store
+from app.store import FactStore, UnknownPatient, get_store
 
 router = APIRouter(prefix="/api/v2", tags=["fast path (mockup)"])
+
+
+def store_for(patient_id: Optional[str]) -> FactStore:
+    """The patient's store (default patient when None); 404 for a patient without a cache."""
+    try:
+        return get_store(patient_id)
+    except UnknownPatient:
+        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' has no cache – import it first")
 
 
 # ---------------------------------------------------------------------------
@@ -32,8 +42,8 @@ router = APIRouter(prefix="/api/v2", tags=["fast path (mockup)"])
 # ---------------------------------------------------------------------------
 
 @router.get("/schema")
-async def get_schema() -> dict[str, Any]:
-    store = get_store()
+async def get_schema(patient_id: Optional[str] = None) -> dict[str, Any]:
+    store = store_for(patient_id)
     by_type: dict[str, int] = {}
     for f in store.facts.values():
         by_type[f.type] = by_type.get(f.type, 0) + 1
@@ -50,8 +60,8 @@ async def get_schema() -> dict[str, Any]:
 
 
 @router.get("/concepts")
-async def list_concepts(type: Optional[str] = None) -> list[dict[str, Any]]:
-    store = get_store()
+async def list_concepts(type: Optional[str] = None, patient_id: Optional[str] = None) -> list[dict[str, Any]]:
+    store = store_for(patient_id)
     return [
         {"concept_id": c.concept_id, "type": c.type, "label_en": c.label_en, "fact_count": len(c.fact_ids)}
         for c in sorted(store.concepts.values(), key=lambda c: c.concept_id)
@@ -59,8 +69,7 @@ async def list_concepts(type: Optional[str] = None) -> list[dict[str, Any]]:
     ]
 
 
-def _fact_payload(fact_id: str) -> dict[str, Any]:
-    store = get_store()
+def _fact_payload(fact_id: str, store: FactStore) -> dict[str, Any]:
     fact = store.get_any_fact(fact_id)
     if fact is None:
         raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found")
@@ -70,27 +79,27 @@ def _fact_payload(fact_id: str) -> dict[str, Any]:
 
 
 @router.get("/concepts/{concept_id}")
-async def get_concept(concept_id: str) -> dict[str, Any]:
-    store = get_store()
+async def get_concept(concept_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
+    store = store_for(patient_id)
     concept = store.concepts.get(concept_id)
     if concept is None:
         raise HTTPException(status_code=404, detail=f"Concept '{concept_id}' not found")
-    return {**concept.model_dump(), "facts": [_fact_payload(fid) for fid in concept.fact_ids]}
+    return {**concept.model_dump(), "facts": [_fact_payload(fid, store) for fid in concept.fact_ids]}
 
 
 @router.get("/facts/{fact_id}")
-async def get_fact(fact_id: str) -> dict[str, Any]:
-    return _fact_payload(fact_id)
+async def get_fact(fact_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
+    return _fact_payload(fact_id, store_for(patient_id))
 
 
 # ---------------------------------------------------------------------------
 # Screens
 # ---------------------------------------------------------------------------
 
-async def _create(situation: str) -> JSONResponse:
+async def _create(situation: str, patient_id: Optional[str]) -> JSONResponse:
     if not situation.strip():
         raise HTTPException(status_code=422, detail="situation must not be empty")
-    screen = await service.create_screen(situation, get_store())
+    screen = await service.create_screen(situation, store_for(patient_id))
     code = 200 if screen.status == "complete" else 202
     return JSONResponse(
         status_code=code,
@@ -101,12 +110,12 @@ async def _create(situation: str) -> JSONResponse:
 
 @router.post("/screens", response_model=FastScreen, status_code=202)
 async def post_screen(req: ScreenRequest) -> JSONResponse:
-    return await _create(req.situation)
+    return await _create(req.situation, req.patient_id)
 
 
 @router.get("/screens", response_model=FastScreen)
-async def get_screen_by_situation(situation: str = Query(..., min_length=1)) -> JSONResponse:
-    return await _create(situation)
+async def get_screen_by_situation(situation: str = Query(..., min_length=1), patient_id: Optional[str] = None) -> JSONResponse:
+    return await _create(situation, patient_id)
 
 
 @router.get("/screens/{screen_id}", response_model=FastScreen)

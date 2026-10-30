@@ -44,6 +44,18 @@ python -m preprocess.run --patient 0000-0001 --from s3
 
 Output is written to `cache/<patient-id>/`. That directory is gitignored.
 
+More patients from FHIR R4 bundles (Synthea / MITRE Coherent: `<folder>/fhir.json` plus
+`<folder>/dicom/*.dcm`). Coded resources become facts directly (no LLM, < 1 s per patient);
+each DICOM gets a PNG preview in `cache/<patient>/images/`:
+
+```bash
+python -m preprocess.import_fhir --all ../data/coherent        # every patient folder
+python -m preprocess.import_fhir --folder ../data/coherent/Wiley422_Hermiston71
+```
+
+Patient IDs are `coh-<first 8 characters of the FHIR id>`; `patient.json` goes to
+`$DATA_DIR/patient-<id>/`, so the gateway's patient search finds them.
+
 ### 4. Start the API server
 
 ```bash
@@ -148,9 +160,15 @@ chat): [docs/screen-api.md](docs/screen-api.md).
 | `GET` | `/api/documents/{doc_id}` | Normalized text + passages |
 | `GET` | `/api/passages/{passage_id}` | Single passage with char offsets |
 | `GET` | `/api/contradictions` | All precomputed contradictions |
+| `GET` | `/api/v2/patients` | Every patient with a cache (IBM + imported FHIR), with image count |
+| `GET` | `/api/v2/patients/{id}/images` | The patient's images (`ImageRef`: preview / slice / DICOM links) |
+| `GET` | `/api/v2/patients/{id}/images/{image_id}/preview.png` · `slice.png?axis=&index=` · `dicom` | Quick PNG views and the original file |
 | `POST` | `/api/v2/chat` | `{"question", "chat_id"?, "screen_id"?}` → `{chat_id, answer, state, sources, fact_ids}`; pass `chat_id` back for follow-ups. `state`: `answered` / `not_documented` / `check` (failed validation, show with a warning). About 2 s with Haiku 5.5 |
 | `GET` | `/api/v2/chat/{chat_id}` | The conversation so far |
 | `GET` | `/healthz` | Cache loaded, manifest version |
+
+Every patient-specific route takes `patient_id` (query, or in the POST body of screens and
+chat); without it the default patient (`PATIENT_ID`) is used. Stores load on first use.
 
 ---
 

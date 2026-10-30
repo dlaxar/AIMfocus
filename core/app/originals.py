@@ -23,18 +23,18 @@ _ENTITY = re.compile(r"&(#\d+;?|#[xX][0-9a-fA-F]+;?|[A-Za-z][A-Za-z0-9]*;?)")
 Tracked = list[tuple[str, int, int]]   # (normalized char, raw start, raw end)
 
 
-def _documents_dir() -> Path:
+def _documents_dir(patient_id: str) -> Path:
     base = settings.DATA_DIR
-    for name in (settings.PATIENT_ID, f"patient-{settings.PATIENT_ID}"):
+    for name in (patient_id, f"patient-{patient_id}"):
         if (base / name / "documents").exists():
             return base / name / "documents"
-    return base / f"patient-{settings.PATIENT_ID}" / "documents"
+    return base / f"patient-{patient_id}" / "documents"
 
 
-@lru_cache(maxsize=64)
-def original_file(doc_id: str) -> Optional[Path]:
+@lru_cache(maxsize=256)
+def original_file(doc_id: str, patient_id: Optional[str] = None) -> Optional[Path]:
     """The original JSON file of a document: named by its ID, or found by its metadata ID."""
-    folder = _documents_dir()
+    folder = _documents_dir(patient_id or settings.PATIENT_ID)
     candidate = folder / f"{doc_id}.json"
     if candidate.exists():
         return candidate
@@ -46,8 +46,8 @@ def original_file(doc_id: str) -> Optional[Path]:
     return None
 
 
-def load_original(doc_id: str) -> Optional[dict]:
-    path = original_file(doc_id)
+def load_original(doc_id: str, patient_id: Optional[str] = None) -> Optional[dict]:
+    path = original_file(doc_id, patient_id)
     if path is None:
         return None
     content = json.loads(path.read_text(encoding="utf-8"))

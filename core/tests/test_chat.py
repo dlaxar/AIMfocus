@@ -73,8 +73,9 @@ class TestChatCards:
         cards = {c["name"]: c for c in out["cards"]}
         assert cards["contrast_allergy"]["state"] == "documented" and cards["contrast_allergy"]["headline"]["text"]
         assert cards["contrast_allergy"]["latest"][0]["source"]["doc_id"] == "TEST001"
-        assert cards["kidney_function"]["state"] == "not_documented"          # said, not left out
-        assert cards["kidney_function"]["headline"]["text"] == "Not documented"
+        assert len(out["cards"]) <= 2                                           # extra cards, not a whole screen
+        assert cards["antithrombotic_medication"]["state"] == "not_documented"  # said, not left out
+        assert cards["antithrombotic_medication"]["headline"]["text"] == "Not documented"
         assert all(c["output"] in ("value", "trend", "table", "list", "image") for c in out["cards"])
         assert "cards" in out["timings_ms"]
 
@@ -93,13 +94,20 @@ class TestChatCards:
         last_cards = [d for n, d in events if n == "cards"][-1]
         assert last_cards["cards_status"] == "complete"
         states = {c["name"]: c["state"] for c in last_cards["cards"]}
-        assert states["contrast_allergy"] == "documented" and states["kidney_function"] == "not_documented"
+        assert states["contrast_allergy"] == "documented" and states["antithrombotic_medication"] == "not_documented"
         answer = next(d for n, d in events if n == "answer")
         assert answer["answer"] and answer["cards_screen_id"] == last_cards["cards_screen_id"]
 
     def test_stream_without_cards(self, client):
         body = client.post("/api/v2/chat/stream", json={"question": "Which allergies?", "cards": False}).text
         assert [n for n, _ in _sse(body)] == ["answer", "done"]
+
+    def test_cards_leave_out_what_the_screen_shows(self, client):
+        screen = client.post("/api/v2/screens", json={"situation": "Anaesthetist, pre-op check"}).json()
+        client.get(f"/api/v2/screens/{screen['screen_id']}?wait=true")
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True, "wait": True,
+                                                "screen_id": screen["screen_id"]}).json()
+        assert "contrast_allergy" not in {c["name"] for c in out["cards"]}     # already on the screen
 
     def test_no_cards_unless_asked(self, client):
         out = client.post("/api/v2/chat", json={"question": "Which allergies?"}).json()

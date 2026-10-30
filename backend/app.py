@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from flask import Flask, Response, abort, jsonify, request, stream_with_context
@@ -50,6 +51,26 @@ def _core(method, path, payload=None):
                    "cd core && uvicorn app.main:app --port 8001")
 
 
+def _patient_query():
+    """'?patient_id=…' when the request names a patient (?patient= or ?patient_id=), else ''."""
+    pid = request.args.get("patient_id") or request.args.get("patient")
+    return f"?patient_id={urllib.parse.quote(pid)}" if pid else ""
+
+
+def _core_binary(path):
+    """Relay a binary core response (images, DICOM) with its content type and headers."""
+    try:
+        upstream = urllib.request.urlopen(f"{CORE_URL}{path}", timeout=60)
+    except urllib.error.HTTPError as e:
+        abort(e.code, e.read().decode("utf-8", "replace"))
+    except urllib.error.URLError:
+        abort(503, f"Core service not reachable at {CORE_URL}")
+    with upstream:
+        headers = {k: v for k, v in upstream.headers.items()
+                   if k.lower() in ("x-slice-count", "cache-control", "content-disposition")}
+        return Response(upstream.read(), mimetype=upstream.headers.get_content_type(), headers=headers)
+
+
 # ---------------------------------------------------------------------------
 # The frontend dev server proxies /api/* here unchanged, so routes keep the /api prefix.
 # ---------------------------------------------------------------------------
@@ -68,7 +89,25 @@ def get_session():
     # The core service answers from its fact store at once and keeps searching the raw
     # text for missing items in the background, so the screen fills while the user
     # picks the patient. The session ID is the core screen ID.
-    screen = _core("POST", "/api/v2/screens", {"situation": situation})
+    # ?patient=<id> builds it for that patient (default: the IBM patient).
+    payload = {"situation": situation}
+    if request.args.get("patient"):
+        payload["patient_id"] = request.args["patient"]
+    screen = _core("POST", "/api/v2/screens", payload)
+    return jsonify(session_id=screen["screen_id"], screen=screen)
+
+
+@app.post("/api/session/<session_id>/patient")
+def switch_session_patient(session_id):
+    """
+    The same situation for another patient: {"patient_id": ...} → a new session
+    {session_id, screen}. Chats then follow the new session's patient.
+    """
+    body = request.get_json(silent=True) or {}
+    if not body.get("patient_id"):
+        abort(400, "Missing 'patient_id'")
+    old = _core("GET", f"/api/v2/screens/{session_id}")
+    screen = _core("POST", "/api/v2/screens", {"situation": old["situation"], "patient_id": body["patient_id"]})
     return jsonify(session_id=screen["screen_id"], screen=screen)
 
 
@@ -155,19 +194,19 @@ def stream_session_screen(session_id):
 @app.get("/api/documents/<doc_id>/original")
 def get_original_document(doc_id):
     """The letter as delivered: {doc_id, file, metadata, text} – text is the original HTML."""
-    return jsonify(_core("GET", f"/api/documents/{doc_id}/original"))
+    return jsonify(_core("GET", f"/api/documents/{doc_id}/original{_patient_query()}"))
 
 
 @app.get("/api/passages/<passage_id>/original")
 def get_passage_original(passage_id):
     """Original letter of a passage plus raw_start / raw_end: text[raw_start:raw_end] is the passage."""
-    return jsonify(_core("GET", f"/api/passages/{passage_id}/original"))
+    return jsonify(_core("GET", f"/api/passages/{passage_id}/original{_patient_query()}"))
 
 
 @app.get("/api/documents/<doc_id>")
 def get_document(doc_id):
     """Normalized document text + passages with offsets, for highlighting a source."""
-    return jsonify(_core("GET", f"/api/documents/{doc_id}"))
+    return jsonify(_core("GET", f"/api/documents/{doc_id}{_patient_query()}"))
 
 
 @app.get("/api/patients/search")
@@ -194,6 +233,37 @@ def search_patients():
     ][:limit]
 
     return jsonify(results)
+
+
+@app.get("/api/patients/available")
+def list_available_patients():
+    """Patients the core has a cache for (IBM letters and imported FHIR records), with image counts."""
+    return jsonify(_core("GET", "/api/v2/patients"))
+
+
+@app.get("/api/patients/<patient_id>/images")
+def list_patient_images(patient_id):
+    """The patient's images: [{image_id, modality, body_site, date, frames, preview_url, slice_url, dicom_url, …}]."""
+    return jsonify(_core("GET", f"/api/v2/patients/{patient_id}/images"))
+
+
+@app.get("/api/patients/<patient_id>/images/<image_id>/preview.png")
+def get_image_preview(patient_id, image_id):
+    """Axial, coronal and sagittal middle slice side by side."""
+    return _core_binary(f"/api/v2/patients/{patient_id}/images/{image_id}/preview.png")
+
+
+@app.get("/api/patients/<patient_id>/images/<image_id>/slice.png")
+def get_image_slice(patient_id, image_id):
+    """One slice: ?axis=axial|coronal|sagittal&index=N (header X-Slice-Count)."""
+    query = urllib.parse.urlencode({k: request.args[k] for k in ("axis", "index") if k in request.args})
+    return _core_binary(f"/api/v2/patients/{patient_id}/images/{image_id}/slice.png" + (f"?{query}" if query else ""))
+
+
+@app.get("/api/patients/<patient_id>/images/<image_id>/dicom")
+def get_image_dicom(patient_id, image_id):
+    """The original DICOM file."""
+    return _core_binary(f"/api/v2/patients/{patient_id}/images/{image_id}/dicom")
 
 
 @app.get("/api/patients/<patient_id>/profile")
