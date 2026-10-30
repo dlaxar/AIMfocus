@@ -14,8 +14,15 @@
   </Teleport>
 </template>
 
+<script>
+import { ref } from 'vue'
+
+// Only one popover is open at a time: opening one closes the others (hover tooltips included)
+const current = ref(null)
+</script>
+
 <script setup>
-import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { watch, nextTick, onBeforeUnmount } from 'vue'
 import { computePosition, autoUpdate, offset, flip, shift, size } from '@floating-ui/dom'
 
 // Floating panel next to `anchor` (an element, or a virtual element with getBoundingClientRect).
@@ -24,11 +31,25 @@ const props = defineProps({
   anchor: { type: Object, default: null },
   placement: { type: String, default: 'bottom-start' },
   wide: { type: Boolean, default: false },
+  // A hover tooltip: closes when another popover opens, but does not close others
+  transient: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'enter', 'leave'])
 
 const floating = ref(null)
+const self = Symbol('popover')
 let cleanup = null
+
+watch(current, (owner) => {
+  if (props.open && owner && owner !== self) emit('close')
+})
+
+watch(
+  () => props.open && !props.transient,
+  (claims) => {
+    if (claims) current.value = self
+  },
+)
 
 function place() {
   if (!props.anchor || !floating.value) return
@@ -72,7 +93,10 @@ watch(
   () => [props.open, props.anchor],
   async ([open]) => {
     teardown()
-    if (!open) return
+    if (!open) {
+      if (current.value === self) current.value = null
+      return
+    }
     await nextTick()
     if (!floating.value || !props.anchor) return
     cleanup = props.anchor instanceof Element
@@ -84,7 +108,10 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(teardown)
+onBeforeUnmount(() => {
+  teardown()
+  if (current.value === self) current.value = null
+})
 </script>
 
 <style scoped>

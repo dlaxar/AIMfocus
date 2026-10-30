@@ -22,6 +22,7 @@
       :open="pinned || hovering"
       :anchor="btn"
       :wide="pinned"
+      :transient="!pinned"
       @close="close"
       @enter="hoverIn"
       @leave="hoverOut"
