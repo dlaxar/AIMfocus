@@ -138,3 +138,40 @@ li.has-cx {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Wide tables scroll inside their block instead of widening the page */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Phone: the value table stacks label above value | date | icons */
+@media (max-width: 600px) {
+  .value-table,
+  .value-table tbody {
+    display: block;
+  }
+  .value-table colgroup {
+    display: none;
+  }
+  .value-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: start;
+    border-bottom: 1px solid var(--row-line);
+  }
+  .value-table tr > * {
+    border-bottom: none;
+  }
+  .value-table .label-cell {
+    grid-column: 1 / -1;
+    padding-bottom: 0;
+  }
+  .value-table .history-toggle {
+    display: inline;
+    margin-left: 8px;
+  }
+  .fact-list li {
+    padding-left: 12px;
+    gap: 6px;
+  }
+}

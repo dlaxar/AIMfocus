@@ -252,6 +252,11 @@ function autoResize(e) {
   margin-right: -50vw;
 }
 
+/* The breakout above leaves the .screen wrapper wider than the viewport; clip, don't scroll */
+:global(.screen:has(> .dashboard)) {
+  overflow-x: clip;
+}
+
 /* ── Header ─────────────────────────────────────────── */
 .patient-header {
   display: flex;
@@ -332,6 +337,16 @@ function autoResize(e) {
 .screen-body {
   max-width: 880px;
   margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+  .facts-scroll {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .tier {
+    padding-left: 10px;
+  }
 }
 
 .situation {

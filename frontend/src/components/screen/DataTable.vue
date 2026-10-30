@@ -1,32 +1,34 @@
 <template>
-  <table class="fact-table data-table">
-    <thead>
-      <tr>
-        <th v-for="c in columns" :key="c" scope="col">{{ COLUMN_LABEL[c] ?? c.replace(/_/g, ' ') }}</th>
-        <th class="col-icons" scope="col"><span class="sr-only">Contradictions and sources</span></th>
-      </tr>
-    </thead>
-    <tbody v-for="v in variables" :key="v.name" :class="['var', v.state]">
-      <tr class="group-row">
-        <th :colspan="columns.length + 1" scope="rowgroup">
-          <span class="var-label">{{ v.label }}</span>
-          <StateTag :state="v.state" :note="v.note" />
-          <ContradictionBadge :refs="unplacedContradictions(v)" />
-        </th>
-      </tr>
-      <tr v-if="v.state === 'pending'">
-        <td v-for="c in columns" :key="c"><span class="skeleton" /></td>
-        <td />
-      </tr>
-      <tr v-for="(row, i) in v.table?.rows ?? []" :key="row.fact_id ?? i" :class="{ 'has-cx': row.contradiction_ids?.length }">
-        <td v-for="c in columns" :key="c" :class="`cell-${c}`">{{ cellText(row.cells[c], c) }}</td>
-        <td class="icon-cell">
-          <ContradictionBadge :ids="row.contradiction_ids ?? []" />
-          <SourceButton :sources="row.source ? [row.source] : []" />
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="table-scroll">
+    <table class="fact-table data-table">
+      <thead>
+        <tr>
+          <th v-for="c in columns" :key="c" scope="col">{{ COLUMN_LABEL[c] ?? c.replace(/_/g, ' ') }}</th>
+          <th class="col-icons" scope="col"><span class="sr-only">Contradictions and sources</span></th>
+        </tr>
+      </thead>
+      <tbody v-for="v in variables" :key="v.name" :class="['var', v.state]">
+        <tr class="group-row">
+          <th :colspan="columns.length + 1" scope="rowgroup">
+            <span class="var-label">{{ v.label }}</span>
+            <StateTag :state="v.state" :note="v.note" />
+            <ContradictionBadge :refs="unplacedContradictions(v)" />
+          </th>
+        </tr>
+        <tr v-if="v.state === 'pending'">
+          <td v-for="c in columns" :key="c"><span class="skeleton" /></td>
+          <td />
+        </tr>
+        <tr v-for="(row, i) in v.table?.rows ?? []" :key="row.fact_id ?? i" :class="{ 'has-cx': row.contradiction_ids?.length }">
+          <td v-for="c in columns" :key="c" :class="`cell-${c}`">{{ cellText(row.cells[c], c) }}</td>
+          <td class="icon-cell">
+            <ContradictionBadge :ids="row.contradiction_ids ?? []" />
+            <SourceButton :sources="row.source ? [row.source] : []" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </template>
 
 <script setup>

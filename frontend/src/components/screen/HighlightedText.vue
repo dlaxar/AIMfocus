@@ -33,7 +33,12 @@ watch(
   async () => {
     if (!props.scrollToMark) return
     await nextTick()
-    markEl?.scrollIntoView({ block: 'center' })
+    // Scroll only the box around the text (excerpt or drawer), never the popover or page
+    const box = markEl?.parentElement?.parentElement
+    if (!box) return
+    const m = markEl.getBoundingClientRect()
+    const b = box.getBoundingClientRect()
+    box.scrollTop += m.top - b.top - (box.clientHeight - m.height) / 2
   },
   { immediate: true },
 )
