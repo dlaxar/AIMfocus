@@ -27,18 +27,23 @@ export function tableColumns(variables) {
   ]
 }
 
+// Variables (already in reading order) → blocks of one kind each, in order of first appearance.
+export function groupIntoBlocks(variables, keyPrefix) {
+  const blocks = []
+  for (const v of variables) {
+    const kind = blockKind(v)
+    let block = blocks.find((b) => b.kind === kind)
+    if (!block) blocks.push((block = { kind, key: `${keyPrefix}:${kind}`, variables: [] }))
+    block.variables.push(v)
+  }
+  return blocks
+}
+
 export function groupByTier(variables) {
   const sorted = [...variables].sort((a, b) => a.priority - b.priority)
   return TIERS.map((tier) => {
     const members = sorted.filter((v) => (v.tier ?? 'important') === tier)
-    const blocks = []
-    for (const v of members) {
-      const kind = blockKind(v)
-      let block = blocks.find((b) => b.kind === kind)
-      if (!block) blocks.push((block = { kind, key: `${tier}:${kind}`, variables: [] }))
-      block.variables.push(v)
-    }
-    return { tier, variables: members, blocks }
+    return { tier, variables: members, blocks: groupIntoBlocks(members, tier) }
   }).filter((t) => t.variables.length)
 }
 

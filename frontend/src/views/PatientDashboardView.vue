@@ -105,6 +105,11 @@
             </template>
           </dl>
         </div>
+
+        <!-- ── Chat: questions with text answers and cards ── -->
+        <section v-if="turns.length" class="chat-thread" aria-label="Questions about this patient">
+          <ChatTurn v-for="t in turns" :key="t.id" :turn="t" :data-turn="t.id" />
+        </section>
       </div>
     </div>
 
@@ -123,7 +128,7 @@
         <button
           class="send-btn"
           type="button"
-          :disabled="!chatMessage.trim()"
+          :disabled="!canSend"
           @click="sendMessage"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -138,11 +143,12 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, provide, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import ContradictionBadge from '../components/screen/ContradictionBadge.vue'
 import SourceButton from '../components/screen/SourceButton.vue'
 import DocumentDrawer from '../components/screen/DocumentDrawer.vue'
+import ChatTurn from '../components/screen/ChatTurn.vue'
 import ValueTable from '../components/screen/ValueTable.vue'
 import DataTable from '../components/screen/DataTable.vue'
 import ListGroup from '../components/screen/ListGroup.vue'
@@ -150,7 +156,7 @@ import TrendGroup from '../components/screen/TrendGroup.vue'
 import { groupByTier } from '../components/screen/layout.js'
 import { formatDate } from '../components/screen/format.js'
 import '../components/screen/screen.css'
-import { getScreen, watchScreen } from '../api.js'
+import { getScreen, watchScreen, askChat } from '../api.js'
 import { session, form } from '../store.js'
 
 const router = useRouter()
@@ -204,18 +210,41 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => stop?.())
+onBeforeUnmount(() => {
+  stop?.()
+  chatStops.forEach((s) => s())
+})
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
+// Each question streams a text answer and cards (screen-api.md, section 7); the
+// chat_id from the first answer is sent back so follow-ups keep the conversation.
 const chatMessage = ref('')
 const textareaEl  = ref(null)
+const turns = ref([])
+let chatId = null
+const chatStops = []
 
-const emit = defineEmits(['send'])
+// Follow-ups need the chat_id, so wait for the previous text answer (cards may still be loading)
+const waitingForAnswer = computed(() => turns.value.some((t) => !t.answer && !t.error))
+const canSend = computed(() => !!chatMessage.value.trim() && !!session.currentId && !waitingForAnswer.value)
 
 function sendMessage() {
   const text = chatMessage.value.trim()
-  if (!text) return
-  emit('send', text)
+  if (!text || !canSend.value) return
+
+  const turn = reactive({ id: turns.value.length + 1, question: text, answer: null, cards: [], done: false, error: '' })
+  turns.value.push(turn)
+  chatStops.push(askChat(session.currentId, text, chatId, {
+    onAnswer: (a) => {
+      chatId = a.chat_id ?? chatId
+      turn.answer = a
+    },
+    onCards: (c) => (turn.cards = c.cards ?? []),
+    onError: (msg) => (turn.error = msg || 'The question could not be answered'),
+    onDone: () => (turn.done = true),
+  }))
+  nextTick(() => document.querySelector(`[data-turn="${turn.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+
   chatMessage.value = ''
   if (textareaEl.value) {
     textareaEl.value.style.height = 'auto'
@@ -456,6 +485,16 @@ function autoResize(e) {
   text-align: center;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* ── Chat thread ────────────────────────────────────── */
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
 }
 
 /* ── Chat footer ────────────────────────────────────── */
