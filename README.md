@@ -136,7 +136,7 @@ Opus upgrade, 90–91 of all 93.
 
 - ✅ End to end on the 5 challenge situations and on new roles and tasks for the same patient
 - ✅ Every fact on screen is sourced; nothing unverified is shown as fact
-- ⚠️ The Opus screen replaces the fast one after about 8–15 s, so cards can still change while you read
+- ⚠️ The Opus screen replaces the fast one a few seconds later, so cards can still change while you read
 - ⚠️ A role-specific screen does not show every detail; specific questions outside the role's
   needs are answered by the chat
 - ⚠️ Prototype limits: sessions live in memory in one process; a new letter means re-running the
