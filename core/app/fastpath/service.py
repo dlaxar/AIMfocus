@@ -233,6 +233,17 @@ _QUESTION = re.compile(r"^\s*(clinical\s+)?question\s*:", re.I)
 _LONG_TERM = re.compile(r"lz-?ekg|holter|langzeit|24\s*-?\s*h|24-|tages|nacht|day\s*mean|night\s*mean|mittelwert", re.I)
 
 
+_EXAM = re.compile(r"\b(ecg|ekg|holter|echo(?:cardiograph\w*)?|duplex|doppler|ct|mri|ultrasound|sonograph\w*|"
+                   r"x-ray|mammograph\w*|histolog\w*|fundus|spirometr\w*|biops\w*)\b", re.I)
+
+
+def _exams(f) -> set[str]:
+    """The examinations a finding or measurement names (e.g. {"ecg"}); empty for other facts."""
+    if getattr(f, "type", "") not in ("finding", "measurement"):
+        return set()
+    return {m.lower().rstrip("s") for m in _EXAM.findall(f.en or "")}
+
+
 def is_question(f) -> bool:
     """A letter's referral question ("Fragestellung: VHF?") extracted as a suspected finding – not a finding."""
     return getattr(f, "status", "") == "suspected" and bool(_QUESTION.match(f.en or ""))
@@ -276,6 +287,17 @@ def resolve_facts(v: SelectedVariable, store: FactStore, reference_date: str) ->
             facts = [f for f in facts if (f.date or "") == newest[_setting(f)]]
         for f in facts:
             picked.setdefault(f.fact_id, f)
+
+    # One examination's results often sit in one sentence but in different concepts
+    # ("EKG: HF 90/min, Normaltyp" → heart rate and axis): a picked result brings the other
+    # results of the same examination from the same passage
+    for f in list(picked.values()):
+        exams = _exams(f)
+        if not exams:
+            continue
+        for g in getattr(store, "facts", {}).values():
+            if g.passage_id == f.passage_id and g.fact_id not in picked and _exams(g) & exams:
+                picked[g.fact_id] = g
 
     # A recommendation is shown as its follow-up status ("Follow-up open: … – no record in the
     # 3 later documents"), which repeats the recommendation and says what became of it
@@ -348,6 +370,11 @@ def _check_derive(out: DeriveOutput, store: FactStore) -> list[str]:
     return errors
 
 
+# A statement that something is missing from the record – not a documented negative finding
+# ("No focal deficits on admission" is a finding and stays one)
+_ABSENCE = re.compile(r"not documented|no record|not (?:reported|mentioned|listed|recorded)|\bno\b[^.]*\bdocumented\b", re.I)
+
+
 def _letter_date_numbers(passages: list, store: FactStore) -> set[str]:
     numbers: set[str] = set()
     for p in passages:
@@ -391,7 +418,13 @@ async def _derive_one(
             var.note = "No passage in the documents covers this"
         else:
             errors = _check_derive(out, store)
-            if errors:
+            if errors and _ABSENCE.search(out.value or ""):
+                # "No CPAP therapy is documented" with a quote that does not match: there is
+                # no evidence it is documented, which is what "not documented" means
+                logger.info("fastpath: derive for %s says absent, citation failed – not documented", var.name)
+                var.state, var.value = "not_documented", "Not documented"
+                var.note = "The text search found no statement of it"
+            elif errors:
                 logger.warning("fastpath: derive result for %s rejected: %s", var.name, errors)
                 var.state = "check"
                 var.value = "Answer could not be verified against the documents"

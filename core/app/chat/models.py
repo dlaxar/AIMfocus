@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.fastpath.models import ScreenVariable
 from app.schemas import Source
 
 
@@ -30,6 +31,9 @@ class ChatRequest(BaseModel):
     question: str
     chat_id: Optional[str] = None     # continue a conversation (follow-up questions)
     screen_id: Optional[str] = None   # the clinician's screen, so follow-ups can refer to it
+    cards: bool = False               # also answer with screen cards (value / trend / table / list)
+    wait: bool = False                # cards: false (default) = reply at once, stream the cards via cards_screen_id;
+                                      # true = wait for the finished cards (use POST /api/v2/chat/stream instead)
 
 
 class ChatMessage(BaseModel):
@@ -46,6 +50,12 @@ class ChatReply(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     fact_ids: list[str] = Field(default_factory=list)
     note: Optional[str] = None        # why an answer is "check"
+    # With cards=true: a screen built for this question, same schema as /api/v2/screens.
+    # cards_screen_id can be streamed (/api/v2/screens/{id}/stream); with wait=true the
+    # finished cards are in `cards` already.
+    cards_screen_id: Optional[str] = None
+    cards_status: Optional[str] = None    # starting / partial / complete
+    cards: list[ScreenVariable] = Field(default_factory=list)
     timings_ms: dict[str, float] = Field(default_factory=dict)
 
 

@@ -186,6 +186,13 @@ class TestDeriveValidation:
         assert any("quote" in e for e in errors)
         assert any("1.4" in e for e in errors)
 
+    def test_absence_statement_versus_negative_finding(self, client):
+        from app.fastpath.service import _ABSENCE
+        assert _ABSENCE.search("No CPAP therapy is documented.")
+        assert _ABSENCE.search("Kidney function is not reported as a value")
+        assert not _ABSENCE.search("No focal neurological deficits on admission")
+        assert not _ABSENCE.search("Normal LV function, no pericardial effusion")
+
     def test_unknown_passage_rejected(self, client):
         from app.fastpath.models import DeriveOutput
         from app.fastpath.service import _check_derive
@@ -200,6 +207,7 @@ class TestResolveFacts:
     class _Store:
         def __init__(self, facts, derived=()):
             self._facts = {f.fact_id: f for f in facts}
+            self.facts = self._facts
             self.derived = {d.fact_id: d for d in derived}
             self.concepts = {f.concept_id: None for f in facts if f.concept_id}
 
@@ -252,6 +260,22 @@ class TestResolveFacts:
                     concept_id="C:plan:surgery", date="2016-05-16", en="Surgery scheduled for 16 May 2016")
         v = SelectedVariable(name="p", label="Planned surgery", concept_ids=["C:plan:surgery"])
         assert [f.fact_id for f in resolve_facts(v, self._Store([plan]), "2016-04-15")] == ["F:LETTER:pla:01"]
+
+    def test_one_examination_in_one_sentence_comes_together(self):
+        """ "EKG: HF 90/min, Normaltyp": choosing the axis brings the heart rate, not unrelated facts."""
+        from app.fastpath.models import SelectedVariable
+        from app.fastpath.service import resolve_facts
+        from app.schemas import Fact
+        f = lambda fid, t, cid, en: Fact(fact_id=fid, type=t, passage_id="L:p28", span=en, concept_id=cid, date="2016-04-15", en=en)
+        axis = f("F:L:fin:06", "finding", "C:finding:ecg_axis", "ECG: normal electrical axis")
+        rate = f("F:L:mea:06", "measurement", "C:meas:heart_rate", "ECG heart rate: 90/min")
+        hba1c = Fact(fact_id="F:L:mea:01", type="measurement", passage_id="L:p15", span="HbA1c 6,4%", concept_id="C:meas:hba1c", date="2016-04-15", en="HbA1c: 6.4%")
+        crp = Fact(fact_id="F:L:fin:09", type="finding", passage_id="L:p15", span="keine Entzündungszeichen", concept_id="C:finding:lab", date="2016-04-15", en="No laboratory signs of inflammation")
+        store = self._Store([axis, rate, hba1c, crp])
+        ecg = resolve_facts(SelectedVariable(name="e", label="Latest ECG", concept_ids=["C:finding:ecg_axis"]), store, "2016-04-15")
+        assert {x.fact_id for x in ecg} == {"F:L:fin:06", "F:L:mea:06"}
+        lab = resolve_facts(SelectedVariable(name="h", label="HbA1c", concept_ids=["C:meas:hba1c"]), store, "2016-04-15")
+        assert [x.fact_id for x in lab] == ["F:L:mea:01"]
 
     def test_recommendation_shown_with_its_follow_up_status(self):
         from app.fastpath.models import SelectedVariable

@@ -98,7 +98,40 @@ def chat_about_patient(session_id):
     payload = {"question": body["question"], "screen_id": session_id}
     if body.get("chat_id"):
         payload["chat_id"] = body["chat_id"]
+    for key in ("cards", "wait"):   # cards=true: also screen cards for the question
+        if key in body:
+            payload[key] = bool(body[key])
     return jsonify(_core("POST", "/api/v2/chat", payload))
+
+
+@app.post("/api/session/<session_id>/chat/stream")
+def chat_about_patient_stream(session_id):
+    """
+    Same body as /chat; server-sent events from the core: "answer" (text, ~1.5 s), "cards" on
+    every change (store facts first, then what the text search finds), then "done".
+    """
+    body = request.get_json(silent=True) or {}
+    if not str(body.get("question", "")).strip():
+        abort(400, "Missing 'question'")
+    payload = {"question": body["question"], "screen_id": session_id}
+    for key in ("chat_id", "cards"):
+        if key in body:
+            payload[key] = body[key]
+    req = urllib.request.Request(f"{CORE_URL}/api/v2/chat/stream", data=json.dumps(payload).encode("utf-8"),
+                                 method="POST", headers={"Content-Type": "application/json"})
+    try:
+        upstream = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as e:
+        abort(e.code, e.read().decode("utf-8", "replace"))
+    except urllib.error.URLError:
+        abort(503, f"Core service not reachable at {CORE_URL}")
+
+    def relay():
+        with upstream:
+            for line in upstream:
+                yield line
+
+    return Response(stream_with_context(relay()), mimetype="text/event-stream")
 
 
 @app.get("/api/session/<session_id>/stream")

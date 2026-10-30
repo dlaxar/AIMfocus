@@ -11,11 +11,12 @@ Chats live in memory (single process), like screens.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
 import uuid
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 from app.chat.models import Chat, ChatAnswer, ChatMessage, ChatReply
 from app.config import settings
@@ -101,14 +102,21 @@ def _check(out: ChatAnswer, store: FactStore) -> tuple[list[str], list[str], lis
     return fact_ids, [p.passage_id for p in passages], errors
 
 
-async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
-              screen_id: Optional[str] = None) -> ChatReply:
-    t0 = time.perf_counter()
+def _open_chat(chat_id: Optional[str], screen_id: Optional[str]) -> Chat:
     chat = _chats.get(chat_id or "") or Chat(chat_id=uuid.uuid4().hex[:12], screen_id=screen_id)
     if screen_id:
         chat.screen_id = screen_id
     _chats[chat.chat_id] = chat
+    return chat
 
+
+async def _start_cards(question: str, chat: Chat, store: FactStore):
+    """A small screen for this question, built in the background like any screen (select →
+    analytic pull → text search in the letters for what the store lacks)."""
+    return await fastpath.create_screen(_card_situation(question, chat), store)
+
+
+async def _text_reply(question: str, chat: Chat, store: FactStore, t0: float) -> ChatReply:
     out: ChatAnswer = await get_client().generate(
         prompt_name="chat",
         messages=[{"role": "user", "content": [
@@ -139,5 +147,71 @@ async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
     chat.messages.append(ChatMessage(role="assistant", content=answer, state=state, sources=sources))
     return ChatReply(
         chat_id=chat.chat_id, answer=answer, state=state, sources=sources, fact_ids=fact_ids, note=note,
-        timings_ms={"llm": t_llm, "total": fastpath._elapsed_ms(t0)},
+        timings_ms={"llm": t_llm},
     )
+
+
+async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
+              screen_id: Optional[str] = None, cards: bool = False, wait: bool = False) -> ChatReply:
+    t0 = time.perf_counter()
+    chat = _open_chat(chat_id, screen_id)
+    card_screen = await _start_cards(question, chat, store) if cards else None
+    reply = await _text_reply(question, chat, store, t0)
+    if card_screen is not None:
+        if wait:
+            card_screen = await fastpath.wait_for(card_screen.screen_id, timeout_s=CARDS_WAIT_S) or card_screen
+            reply.cards = list(card_screen.variables)
+            reply.timings_ms["cards"] = card_screen.timings_ms.get("complete") or fastpath._elapsed_ms(t0)
+        reply.cards_screen_id, reply.cards_status = card_screen.screen_id, card_screen.status
+    reply.timings_ms["total"] = fastpath._elapsed_ms(t0)
+    return reply
+
+
+async def stream(question: str, store: FactStore, chat_id: Optional[str] = None,
+                 screen_id: Optional[str] = None, cards: bool = True) -> AsyncIterator[tuple[str, dict]]:
+    """
+    Events as they are ready: ("answer", ChatReply) as soon as the text is there,
+    ("cards", {status, cards, …}) on every change of the card screen – facts from the store
+    first, then what the text search finds in the letters – and finally ("done", {}).
+    Nothing waits for the slowest part.
+    """
+    t0 = time.perf_counter()
+    chat = _open_chat(chat_id, screen_id)
+    card_screen = await _start_cards(question, chat, store) if cards else None
+    text = asyncio.create_task(_text_reply(question, chat, store, t0))
+    sent_answer, last_version = False, -1
+    while True:
+        if not sent_answer and text.done():
+            sent_answer = True
+            try:
+                reply = text.result()
+            except Exception as exc:  # the cards may still come; say what failed
+                yield "error", {"detail": f"Could not answer: {type(exc).__name__}"}
+            else:
+                if card_screen is not None:
+                    reply.cards_screen_id = card_screen.screen_id
+                reply.timings_ms["total"] = fastpath._elapsed_ms(t0)
+                yield "answer", reply.model_dump()
+        if card_screen is not None and card_screen.version != last_version:
+            last_version = card_screen.version
+            yield "cards", {"chat_id": chat.chat_id, "cards_screen_id": card_screen.screen_id,
+                            "cards_status": card_screen.status, "cards": [v.model_dump() for v in card_screen.variables],
+                            "elapsed_ms": fastpath._elapsed_ms(t0)}
+        cards_done = card_screen is None or card_screen.status == "complete"
+        if sent_answer and cards_done:
+            yield "done", {"elapsed_ms": fastpath._elapsed_ms(t0)}
+            return
+        await asyncio.sleep(0.1)
+
+
+CARDS_WAIT_S = 20.0
+
+
+def _card_situation(question: str, chat: Chat) -> str:
+    """The question as a situation for the select call, with the role and the last exchange."""
+    screen = fastpath.get_screen(chat.screen_id) if chat.screen_id else None
+    role = f" The clinician is: {screen.role} ({screen.task})." if screen and screen.role else ""
+    last = [m for m in chat.messages[-2:]]
+    earlier = (f" Earlier: they asked \"{last[0].content}\", answer: \"{last[1].content}\"."
+               if len(last) == 2 and last[0].role == "user" else "")
+    return f"Question about the patient: {question}.{role}{earlier}"
