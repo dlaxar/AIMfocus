@@ -89,7 +89,7 @@ core/
     s4_export.py          fact_sheet.txt + manifest.json
     vocab.py              Controlled vocabulary for concept keys and measurement keys
     import_fhir.py        FHIR R4 bundles + DICOM → cache, no LLM
-    make_demo_patient.py  Demo patient 0000-0101 (Eva Mustermann): copy of 0000-0001 + MRI report and image
+    make_demo_patient.py  Demo patient 0000-0101 (Eva Musterfrau): copy of 0000-0001 + MRI report and image
     convert_cache.py      JSON files ↔ fhir.json
     validate_fhir.py      Official HL7 validator run
     refresh_derived.py    Recompute code-only derived facts

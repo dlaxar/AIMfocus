@@ -25,7 +25,7 @@ from app.config import settings
 
 SOURCE = "0000-0001"
 TARGET = "0000-0101"
-NAME = "Eva Mustermann"
+NAME = "Eva Musterfrau"
 BIRTH = "1962-09-22"
 MRI_DOC = "12340020"
 MRI_DATE = "2015-06-15"
@@ -157,7 +157,7 @@ def make(dicom: Path) -> None:
     dst_dicom = data_dst / "dicom" / f"{IMAGE_ID}.dcm"
     dst_dicom.parent.mkdir(parents=True, exist_ok=True)
     ds = pydicom.dcmread(dicom)
-    ds.PatientName, ds.PatientID = "Mustermann^Eva", TARGET
+    ds.PatientName, ds.PatientID = "Musterfrau^Eva", TARGET
     ds.PatientBirthDate, ds.StudyDate, ds.StudyDescription = BIRTH.replace("-", ""), MRI_DATE.replace("-", ""), "MRT Schaedel nativ"
     ds.save_as(dst_dicom)
     preview = images.render_preview(dst_dicom, cache_dst / "images", IMAGE_ID)
