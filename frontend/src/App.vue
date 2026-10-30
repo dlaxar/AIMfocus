@@ -4,11 +4,14 @@
       <img src="./assets/logo.png" alt="Logo" />
     </RouterLink>
     <RouterView />
+    <!-- The dashboard shows the footer inside its fixed chat bar instead -->
+    <AppFooter v-if="route.path !== '/patient/dashboard'" />
   </main>
 </template>
 
 <script setup>
 import { useRoute } from 'vue-router'
+import AppFooter from './components/AppFooter.vue'
 const route = useRoute()
 </script>
 

@@ -24,7 +24,8 @@ body {
   max-width: 650px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 48px 24px 100px;
+  /* The footer at the bottom keeps content clear of the fixed Next button */
+  padding: 48px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;

@@ -138,6 +138,7 @@
           </svg>
         </button>
       </div>
+      <AppFooter />
     </div>
 
     <DocumentDrawer />
@@ -155,6 +156,7 @@ import ValueTable from '../components/screen/ValueTable.vue'
 import DataTable from '../components/screen/DataTable.vue'
 import ListGroup from '../components/screen/ListGroup.vue'
 import TrendGroup from '../components/screen/TrendGroup.vue'
+import AppFooter from '../components/AppFooter.vue'
 import { groupByTier } from '../components/screen/layout.js'
 import { formatDate } from '../components/screen/format.js'
 import '../components/screen/screen.css'
@@ -356,7 +358,7 @@ function autoResize(e) {
   flex: 1;
   overflow-y: auto;
   /* Extra bottom padding so last card isn't hidden behind the fixed footer */
-  padding: 20px 24px 120px;
+  padding: 20px 24px 144px;
 }
 
 .screen-body {
@@ -509,7 +511,7 @@ function autoResize(e) {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 12px 24px 20px;
+  padding: 12px 24px 8px;
   /* No background or border — the fade pseudo-element handles the transition */
   background: transparent;
   border: none;
@@ -530,6 +532,12 @@ function autoResize(e) {
     var(--bg) 60%
   );
   z-index: -1;
+}
+
+/* Compact site footer under the input */
+.chat-footer .app-footer {
+  min-height: 0;
+  margin-top: 8px;
 }
 
 .chat-input-row {
