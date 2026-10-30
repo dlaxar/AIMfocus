@@ -33,13 +33,28 @@ def _all_patients(data_dir: Path) -> tuple[dict, ...]:
     return tuple(patients)
 
 
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def _birth_keys(birth: Optional[str]) -> list[str]:
+    """The ways a date of birth may be typed: "1959-03-15", "15.03.1959", "15.3.1959", "15 mar 1959"."""
+    if not birth or len(birth) < 10:
+        return []
+    y, m, d = birth[:4], birth[5:7], birth[8:10]
+    keys = [birth[:10], f"{d}.{m}.{y}", f"{int(d)}.{int(m)}.{y}"]
+    if m.isdigit() and 1 <= int(m) <= 12:
+        keys.append(f"{int(d)} {_MONTHS[int(m) - 1]} {y}")
+    return keys
+
+
 def search_patients(q: str, limit: int = 10) -> list[dict]:
-    """Patients whose name or ID contains q (case-insensitive), from every patient.json in DATA_DIR."""
+    """Patients whose name, ID or date of birth contains q (case-insensitive), from every patient.json in DATA_DIR."""
     q = q.strip().lower()
     if not q:
         return []
     return [p for p in _all_patients(settings.DATA_DIR)
-            if q in str(p.get("name", "")).lower() or q in str(p.get("id", "")).lower()][:limit]
+            if any(q in key.lower() for key in
+                   [str(p.get("name", "")), str(p.get("id", "")), *_birth_keys(p.get("dateOfBirth"))])][:limit]
 
 
 def _age(birth: Optional[str], on: Optional[str]) -> Optional[int]:

@@ -1,7 +1,7 @@
 // Core API root. Override with VITE_BASE_URL in frontend/.env.local; '/api' goes through the Vite dev proxy.
 export const BASE_URL = (import.meta.env.VITE_BASE_URL ?? '/api').replace(/\/$/, '')
 
-// Searches patients by name or ID. Returns array of { id, name, dob, ward }.
+// Searches patients by name, ID or date of birth. Returns array of { id, name, dateOfBirth, … }.
 export async function searchPatients(q, limit = 10) {
   const url = `${BASE_URL}/v2/patients/search?q=${encodeURIComponent(q)}&limit=${limit}`
   const res = await fetch(url)

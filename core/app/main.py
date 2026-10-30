@@ -353,7 +353,7 @@ async def get_passage_original(passage_id: str, patient_id: Optional[str] = None
 # Declared before /api/v2/patients/{patient_id}, which would otherwise match "search"
 @app.get("/api/v2/patients/search")
 async def search_patients(q: str = "", limit: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
-    """Patients whose name or ID contains q (case-insensitive): {id, name, dateOfBirth, …} per patient."""
+    """Patients whose name, ID or date of birth contains q (case-insensitive): {id, name, dateOfBirth, …} per patient."""
     return patient.search_patients(q, limit)
 
 

@@ -35,7 +35,7 @@
         @mouseover="activeIdx = idx"
       >
         <span class="patient-name">{{ item.name }}</span>
-        <span class="patient-meta">{{ item.id }} · {{ item.ward }}</span>
+        <span class="patient-meta">{{ item.id }}<template v-if="item.dateOfBirth"> · born {{ formatDate(item.dateOfBirth) }}</template></span>
       </li>
     </ul>
 
@@ -48,10 +48,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { searchPatients } from '../api.js'
+import { formatDate } from './screen/format.js'
 
 const props = defineProps({
-  modelValue: { type: Object, default: null }, // { id, name, dob, ward } or null
-  placeholder: { type: String, default: 'Search by name or ID…' },
+  modelValue: { type: Object, default: null }, // { id, name, dateOfBirth, … } or null
+  placeholder: { type: String, default: 'Search by name, ID or date of birth…' },
 })
 
 const emit = defineEmits(['update:modelValue'])
