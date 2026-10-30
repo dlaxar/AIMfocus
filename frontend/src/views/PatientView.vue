@@ -52,19 +52,39 @@ import { getSessionSummary, getStats, setSessionPatient } from '../api.js'
 const router = useRouter()
 const selectedPatient = ref(null)
 
+const loading = ref(false)
+const error = ref('')
+
+// The core starts rebuilding the screen as soon as a patient is picked, not only on Next.
+// PUTs are chained so the last picked patient is always the one the core ends up with.
+let lastPut = Promise.resolve()
+let putPatientId = null
+function putPatient(id) {
+  putPatientId = id
+  error.value = ''
+  const req = lastPut.catch(() => {}).then(() => session.currentId && setSessionPatient(session.currentId, id))
+  lastPut = req
+  req.catch((e) => {
+    if (lastPut !== req) return
+    putPatientId = null // retried on Next
+    error.value = e.message || 'Could not select the patient'
+  })
+  return req
+}
+
 watch(selectedPatient, (p) => {
   form.patient = p ? p.id : ''
   form.patientData = p ?? null
+  if (p && p.id !== putPatientId) putPatient(p.id)
 })
 
-const loading = ref(false)
-const error = ref('')
 async function next() {
   if (!selectedPatient.value || loading.value) return
   loading.value = true
   error.value = ''
   try {
-    if (session.currentId) await setSessionPatient(session.currentId, selectedPatient.value.id)
+    if (selectedPatient.value.id !== putPatientId) putPatient(selectedPatient.value.id)
+    await lastPut
     router.push({ path: '/patient/dashboard', state: { patient: selectedPatient.value } })
   } catch (e) {
     error.value = e.message || 'Could not select the patient'
