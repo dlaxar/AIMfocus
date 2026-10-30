@@ -32,8 +32,8 @@
         </div>
 
         <p v-if="error" class="error" role="alert">{{ error }}</p>
-        <p v-else-if="!screen" class="empty-state muted">Loading…</p>
-        <p v-else-if="screen.error" class="error" role="alert">{{ screen.error }}</p>
+        <p v-else-if="screen?.error" class="error" role="alert">{{ screen.error }}</p>
+        <div v-else-if="!tiers.length" class="tiers-loading"><AIMfocusChase /></div>
 
         <p v-if="screen?.contradictions?.length" class="cx-banner">
           <ContradictionBadge :ids="screen.contradictions.map((c) => c.contradiction_id)" />
@@ -98,7 +98,7 @@
         </details>
 
         <!-- ── Timings ──────────────────────────────────── -->
-        <div v-if="screen?.timings_ms" class="timings">
+        <div v-if="hasTimings" class="timings">
           <span class="timings-label">Timings</span>
           <dl class="timings-grid">
             <template v-for="(val, key) in screen.timings_ms" :key="key">
@@ -157,6 +157,7 @@ import ListGroup from '../components/screen/ListGroup.vue'
 import TrendGroup from '../components/screen/TrendGroup.vue'
 import ImageGroup from '../components/screen/ImageGroup.vue'
 import AppFooter from '../components/AppFooter.vue'
+import AIMfocusChase from '../components/aimfocus-chase/AIMfocusChase.vue'
 import { groupByTier } from '../components/screen/layout.js'
 import { formatDate } from '../components/screen/format.js'
 import '../components/screen/screen.css'
@@ -196,6 +197,7 @@ const BLOCKS = { values: ValueTable, tables: DataTable, lists: ListGroup, trends
 
 const tiers = computed(() => (screen.value ? groupByTier(screen.value.variables ?? []) : []))
 const backgroundOpen = ref(false)
+const hasTimings = computed(() => Object.keys(screen.value?.timings_ms ?? {}).length > 0)
 
 // Every contradiction in the record by ID, for the badges on values, rows and points
 const contradictionIndex = computed(() => new Map(
@@ -505,11 +507,9 @@ function autoResize(e) {
   gap: 6px;
 }
 
-.empty-state {
-  margin: 48px 0 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.9rem;
+.tiers-loading {
+  max-width: 320px;
+  margin: 48px auto 0;
 }
 
 /* ── Chat thread ────────────────────────────────────── */
