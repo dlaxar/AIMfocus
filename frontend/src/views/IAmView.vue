@@ -31,7 +31,10 @@
   </p>
 
   <section v-if="session.recent.length" class="recent">
-    <h2>Recent</h2>
+    <div class="recent-head">
+      <h2>Recent</h2>
+      <button type="button" class="clear" @click="clearRecentSessions">Clear</button>
+    </div>
     <ul>
       <li v-for="s in session.recent" :key="s.id">
         <button type="button" :class="{ active: s.id === session.currentId }" @click="resume(s.id)">
@@ -54,7 +57,7 @@ import { ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
 import AIMfocusLogo from '../components/AIMfocusLogo.vue'
-import { form, session, startSession, resumeSession } from '../store.js'
+import { form, session, startSession, resumeSession, clearRecentSessions } from '../store.js'
 import { createSession } from '../api.js'
 
 const router = useRouter()
@@ -202,13 +205,32 @@ textarea {
   color: white;
   animation: pulse 1.2s ease-in-out infinite;
 }
-.recent h2 {
+.recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   margin: 0 0 8px;
+}
+.recent h2 {
+  margin: 0;
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+.recent .clear {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.recent .clear:hover {
+  color: var(--text);
 }
 .recent ul {
   list-style: none;
@@ -218,7 +240,7 @@ textarea {
   flex-direction: column;
   gap: 4px;
 }
-.recent button {
+.recent li button {
   width: 100%;
   padding: 10px 12px;
   border: none;
@@ -232,8 +254,8 @@ textarea {
   gap: 2px;
   cursor: pointer;
 }
-.recent button:hover,
-.recent button.active {
+.recent li button:hover,
+.recent li button.active {
   background: var(--surface);
 }
 .recent .title {

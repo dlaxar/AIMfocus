@@ -54,6 +54,10 @@ export function setSessionSummary(id, summary, icon_url) {
   }
 }
 
+export function clearRecentSessions() {
+  session.recent = []
+}
+
 export function resumeSession(id) {
   const entry = session.recent.find((s) => s.id === id)
   session.currentId = id
