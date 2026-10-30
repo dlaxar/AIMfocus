@@ -8,9 +8,9 @@
         {{ turn.answer.answer }}<StateTag :state="turn.answer.state" :note="turn.answer.note" />
         <SourceButton v-if="turn.answer.sources?.length" :sources="turn.answer.sources" />
       </p>
-      <p v-else-if="!turn.error" class="answer thinking">
-        <span class="skeleton" /><span class="skeleton short" />
-      </p>
+      <div v-else-if="!turn.error" class="answer thinking">
+        <AIMfocusChase />
+      </div>
       <p v-if="turn.error" class="error" role="alert">{{ turn.error }}</p>
 
       <!-- Cards: the variables that answer the question, rendered like the screen -->
@@ -32,6 +32,7 @@ import ValueTable from './ValueTable.vue'
 import DataTable from './DataTable.vue'
 import ListGroup from './ListGroup.vue'
 import TrendGroup from './TrendGroup.vue'
+import AIMfocusChase from '../aimfocus-chase/AIMfocusChase.vue'
 import { groupIntoBlocks } from './layout.js'
 
 // One question with its text answer and cards.
@@ -98,15 +99,7 @@ const blocks = computed(() => groupIntoBlocks(
   border: 1px solid var(--border);
 }
 .thinking {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.thinking .skeleton {
-  width: 90%;
-}
-.thinking .skeleton.short {
-  width: 55%;
+  max-width: 320px;
 }
 
 .cards {
