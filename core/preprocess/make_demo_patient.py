@@ -3,8 +3,10 @@ preprocess/make_demo_patient.py – a demo patient with a brain MRI, made from t
 
 The challenge patient (0000-0001) has no imaging files, and her letters mention no MRI, so she
 stays as she is (the jury tests with her). This makes a separate synthetic patient for the
-demo: her record copied with another name, ID and date of birth, plus one added radiology
-report (cranial MRI, June 2015) whose image is a DICOM volume from the Coherent data set.
+demo: her record copied with another name, ID and date of birth. Her head imaging of 11 June
+2015 (a non-contrast cranial CT in the letters) becomes a non-contrast cranial MRI ("Schädel-MR"),
+with its radiology report added and a DICOM volume from the Coherent data set as its image, so
+the copy has one head imaging study and it is an MRI.
 
 Everything is replaced with strings of the same length, so passage offsets, sources and
 contradictions of the copy stay valid. No LLM call: the copied cache is reused, the MRI
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -28,7 +31,7 @@ TARGET = "0000-0101"
 NAME = "Eva Huber"
 BIRTH = "1962-09-22"
 MRI_DOC = "12340020"
-MRI_DATE = "2015-06-15"
+MRI_DATE = "2015-06-11"
 IMAGE_ID = f"mri-{TARGET}-{MRI_DATE}"
 
 # Same length on both sides: every offset into the texts stays right
@@ -36,34 +39,39 @@ REPLACE = [
     (SOURCE, TARGET),
     ("15.03.1959", "22.09.1962"), ("15/03/1959", "22/09/1962"), ("1959-03-15", "1962-09-22"),
     ("56-jährige", "52-jährige"), ("56-j\\u00e4hrige", "52-j\\u00e4hrige"), ("56-year-old", "52-year-old"),
+    ("Schädel-CT", "Schädel-MR"), ("Sch\\u00e4del-CT", "Sch\\u00e4del-MR"),   # the head imaging is an MRI here
 ]
+# The letters' facts about that imaging, from CT to MRI (English text, concept)
+CT_TO_MRI = [(r"\bnon-contrast CT scan\b", "non-contrast MRI"), (r"\bcranial CT\b", "cranial MRI"),
+             (r"\bHead CT\b", "Head MRI"), (r"\bCT scan\b", "MRI"), (r"\bCT\b", "MRI")]
+CT_CONCEPT, MRI_CONCEPT = "C:proc:cranial_ct", "C:proc:cranial_mri"
 
 MRI_TEXT = (
     "Institut für Radiologie<BR><BR>"
     f"Patient(in): NN_{TARGET} VN_{TARGET} | geb. 22.09.1962<BR><BR>"
-    "MRT Schädel vom 15.06.2015<BR><BR>"
-    "Fragestellung: Amaurosis fugax links, Schwindel. Ischämie? Blutung?<BR><BR>"
-    "Technik: MRT des Neurocraniums nativ (bekannte KM-Allergie), T1, T2, FLAIR, DWI.<BR><BR>"
+    "Schädel-MR vom 11.06.2015<BR><BR>"
+    "Fragestellung: Amaurosis fugax links, Schwindel, hypertensive Entgleisung. Blutung? Ischämie?<BR><BR>"
+    "Technik: MR des Neurocraniums nativ (bekannte KM-Allergie), T1, T2, FLAIR, DWI.<BR><BR>"
     "Befund:<BR>"
-    "Kein Nachweis einer akuten Diffusionsstörung im Sinne einer frischen Ischämie. "
-    "Kein Nachweis einer intrakraniellen Blutung. "
-    "Einzelne unspezifische punktförmige Marklagerhyperintensitäten in FLAIR, vereinbar mit einer beginnenden Mikroangiopathie. "
-    "Ventrikelsystem normal weit, Mittellinie nicht verlagert.<BR><BR>"
+    "Großhirn- und Kleinhirnhemisphären symmetrisch unauffällig. Mittellinienstrukturen regelrecht. "
+    "Kein Nachweis einer intrakraniellen Blutung, keine Diffusionsstörung im Sinne einer frischen Ischämie. "
+    "Arteriosklerotische Gefäßwandveränderungen im Bereich des linken Karotissiphons.<BR><BR>"
     "Beurteilung:<BR>"
-    "Kein Nachweis einer frischen Ischämie oder Blutung. Beginnende zerebrale Mikroangiopathie."
+    "Kein Nachweis einer intrakraniellen Blutung oder frischen Ischämie. Arteriosklerose des linken Karotissiphons."
 )
 MRI_META = {"id": MRI_DOC, "title": "Radiologischer Befund", "version": "1", "date": MRI_DATE, "type": "MRT",
             "group": "Befund", "division": "Radiologie", "hospital": "Beispielkrankenhaus",
             "department": "Institut für Radiologie"}
 # (span in the report, type, concept, status, English text, extra fields)
 MRI_FACTS = [
-    ("MRT Schädel vom 15.06.2015", "procedure", "C:proc:cranial_mri", "positive",
+    ("Schädel-MR vom 11.06.2015", "procedure", MRI_CONCEPT, "positive",
      f"MRI of the head (without contrast) on {MRI_DATE} – image available",
-     {"name": "MRT Schädel", "modality": "MR", "body_site": "Head", "image_id": IMAGE_ID}),
-    ("Kein Nachweis einer frischen Ischämie oder Blutung.", "finding", "C:finding:brain:acute_ischemia", "negative",
-     "No acute ischaemia or intracranial haemorrhage on cranial MRI", {}),
-    ("Beginnende zerebrale Mikroangiopathie.", "diagnosis", "C:dx:cerebral_microangiopathy", "positive",
-     "Early cerebral microangiopathy (nonspecific white matter hyperintensities on MRI)", {}),
+     {"name": "Schädel-MR", "modality": "MR", "body_site": "Head", "image_id": IMAGE_ID}),
+    ("Kein Nachweis einer intrakraniellen Blutung oder frischen Ischämie.", "finding",
+     "C:finding:brain:intracranial_hemorrhage", "negative",
+     "No intracranial haemorrhage or acute ischaemia on cranial MRI", {}),
+    ("Arteriosklerose des linken Karotissiphons.", "finding", "C:finding:carotid_siphon:atherosclerosis", "positive",
+     "Atherosclerosis of the left carotid siphon on cranial MRI", {}),
 ]
 
 
@@ -115,6 +123,37 @@ def make(dicom: Path) -> None:
                                         for c in _load(cache_dst / "concepts.json")
                                         if any(i in kept_ids for i in c["fact_ids"])])
     _save(cache_dst / "s1_report.json", [r for r in _load(cache_dst / "s1_report.json") if r["doc_id"] in letters])
+
+    # The letters' head CT is this patient's MRI: facts, their concept, and IBM's procedure list
+    facts = _load(cache_dst / "facts.json")
+    for f in facts:
+        if not re.search(r"\bCT\b", f["en"] or "") and f["concept_id"] != CT_CONCEPT:
+            continue
+        for pattern, repl in CT_TO_MRI:
+            f["en"] = re.sub(pattern, repl, f["en"])
+        if f["concept_id"] == CT_CONCEPT:
+            f["concept_id"] = MRI_CONCEPT
+            f["fields"] = {**f.get("fields", {}), "modality": "MR", "image_id": IMAGE_ID}
+    _save(cache_dst / "facts.json", facts)
+    _save(cache_dst / "facts.raw.json", facts)
+    concepts = []
+    for c in _load(cache_dst / "concepts.json"):
+        if c["concept_id"] == CT_CONCEPT:
+            c = {**c, "concept_id": MRI_CONCEPT, "label_en": "Cranial MRI"}
+        concepts.append(c)
+    _save(cache_dst / "concepts.json", concepts)
+    procedures = _load(data_dst / "procedures.json")
+    def drop_ct(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("values"), list):
+                node["values"] = [v for v in node["values"] if not (isinstance(v, dict) and v.get("name") == "Computertomographie")]
+            for v in node.values():
+                drop_ct(v)
+        elif isinstance(node, list):
+            for v in node:
+                drop_ct(v)
+    drop_ct(procedures)
+    _save(data_dst / "procedures.json", procedures)
 
     info = _load(data_dst / "patient.json")
     info.update({"id": TARGET, "name": NAME, "dateOfBirth": BIRTH, "age": 64, "source": "demo",
