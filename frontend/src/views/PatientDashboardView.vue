@@ -2,14 +2,11 @@
   <div class="dashboard">
     <!-- ── Patient header ─────────────────────────── -->
     <header class="patient-header">
-      <button class="back-btn" type="button" @click="router.back()" aria-label="Back">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <router-link to="/" class="header-logo-link" aria-label="Home">
-        <img src="../assets/logo.png" alt="Logo" class="header-logo" />
-      </router-link>
+      <div class="header-inner">
+        <router-link to="/" class="header-logo-link" aria-label="Home">
+          <img src="../assets/logo.png" alt="Logo" class="header-logo" />
+        </router-link>
+      </div>
     </header>
 
     <!-- ── Screen (scrollable body) ──────────────── -->
@@ -17,7 +14,10 @@
       <div class="screen-body">
         <!-- Patient and situation -->
         <div class="patient-info">
-          <h1 v-if="patient" class="patient-name">{{ patient.name }}</h1>
+          <div v-if="patient" class="patient-name-row">
+            <h1 class="patient-name">{{ patient.name }}</h1>
+            <router-link class="change-link" to="/patient">Change patient</router-link>
+          </div>
           <div v-if="patient" class="patient-meta">
             <span v-for="(m, i) in patientMeta" :key="i">{{ m }}</span>
           </div>
@@ -147,7 +147,6 @@
 
 <script setup>
 import { ref, reactive, computed, provide, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
 import ContradictionBadge from '../components/screen/ContradictionBadge.vue'
 import SourceButton from '../components/screen/SourceButton.vue'
 import DocumentDrawer from '../components/screen/DocumentDrawer.vue'
@@ -163,7 +162,6 @@ import '../components/screen/screen.css'
 import { getScreen, watchScreen, askChat } from '../api.js'
 import { session, form } from '../store.js'
 
-const router = useRouter()
 const patient = computed(() => form.patientData)
 const patientMeta = computed(() => {
   const p = patient.value
@@ -258,7 +256,9 @@ function sendMessage() {
 function autoResize(e) {
   const el = e.target
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+  // border-box height includes the borders, scrollHeight doesn't
+  const border = el.offsetHeight - el.clientHeight
+  el.style.height = Math.min(el.scrollHeight + border, 160) + 'px'
 }
 </script>
 
@@ -282,10 +282,7 @@ function autoResize(e) {
 
 /* ── Header ─────────────────────────────────────────── */
 .patient-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px 24px 16px;
+  padding: 16px 24px;
   /* Solid bg so the sticky header covers scrolling content all the way to the top */
   background: var(--bg);
   border-bottom: none;
@@ -294,30 +291,24 @@ function autoResize(e) {
   z-index: 10;
 }
 
-.back-btn {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s;
-}
-.back-btn:hover {
-  color: var(--text);
+/* Same column as .screen-body so the logo lines up with the content */
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(880px - 48px);
+  margin: 0 auto;
 }
 
+/* Matches the logo App.vue shows on the other views: 40px tall, with the
+   image's transparent left edge pulled out so the lettering meets the content */
 .header-logo-link {
   display: flex;
+  margin-left: -17px;
 }
 
 .header-logo {
-  height: 32px;
+  height: 40px;
   width: auto;
 }
 
@@ -326,11 +317,29 @@ function autoResize(e) {
   margin-bottom: 18px;
 }
 
+.patient-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .patient-name {
-  margin: 0 0 4px;
+  margin: 0;
   text-align: left;
   font-size: 1.6rem;
   font-weight: 600;
+}
+
+.change-link {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.change-link:hover {
+  text-decoration: underline;
 }
 
 .patient-meta {
@@ -358,19 +367,16 @@ function autoResize(e) {
   flex: 1;
   overflow-y: auto;
   /* Extra bottom padding so last card isn't hidden behind the fixed footer */
-  padding: 20px 24px 144px;
+  padding: 0 24px 144px;
 }
 
+/* Same content width as .screen on the other views (880px minus its 24px padding) */
 .screen-body {
-  max-width: 880px;
+  max-width: calc(880px - 48px);
   margin: 0 auto;
 }
 
 @media (max-width: 600px) {
-  .facts-scroll {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
   .tier {
     padding-left: 10px;
   }
@@ -544,6 +550,9 @@ function autoResize(e) {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+  /* Centred in the same column as .screen-body */
+  max-width: calc(880px - 48px);
+  margin: 0 auto;
 }
 
 .chat-input {

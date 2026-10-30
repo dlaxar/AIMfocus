@@ -21,7 +21,7 @@ body {
 
 /* Phone-sized column, centred on larger screens */
 .screen {
-  max-width: 650px;
+  max-width: 880px;
   min-height: 100dvh;
   margin: 0 auto;
   /* The footer at the bottom keeps content clear of the fixed Next button */
