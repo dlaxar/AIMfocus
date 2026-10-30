@@ -46,6 +46,15 @@ def _extract_numbers(text: str) -> list[str]:
     return re.findall(r"\b\d+(?:[.,]\d+)?\b", text)
 
 
+# A number with its unit; µg / ug / mcg are one unit. Catches "5 g" written for "5 µg".
+_UNIT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(µg|μg|ug|mcg|mg|kg|g|ml|mmhg|cm|mm)(?![a-zA-Zµμ])", re.IGNORECASE)
+_UNIT_ALIASES = {"μg": "µg", "ug": "µg", "mcg": "µg"}
+
+
+def _unit_pairs(text: str) -> set[tuple[str, str]]:
+    return {(n, _UNIT_ALIASES.get(u.lower(), u.lower())) for n, u in _UNIT_RE.findall(text)}
+
+
 def _extract_dates(text: str) -> list[str]:
     """Extract dates in various formats and return them as YYYY-MM-DD or YYYY-MM or YYYY."""
     dates: list[str] = []
@@ -192,6 +201,11 @@ def validate_item(
     for num in _extract_numbers(norm_text_en):
         if num not in norm_all_text:
             result.fail(f"number '{num}' in text_en not found in any cited fact")
+
+    # Rule 2b: a number with a unit must keep that unit (no "5 g" for "5 µg")
+    fact_units = _unit_pairs(norm_all_text)
+    for num, unit in sorted(_unit_pairs(norm_text_en) - fact_units):
+        result.fail(f"'{num} {unit}' in text_en does not match the unit in the cited facts")
 
     # Rule 3: drug name check (brand and generic from fields)
     words_en = set(re.findall(r"\b[a-z]{4,}\b", item.text_en.lower()))

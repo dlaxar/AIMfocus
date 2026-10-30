@@ -242,6 +242,9 @@ def run_eval(base_url: str, include_extra: bool, cases_dir: Path, use_judge: boo
             situations.extend(_parse_situations_md(extra_path))
 
     expected = _load_expected(cases_dir)
+    if include_extra and (EVAL_DIR / "expected_extra.json").exists():
+        extra = json.loads((EVAL_DIR / "expected_extra.json").read_text(encoding="utf-8"))
+        expected.update({item["id"]: item for item in extra})
     # One event loop for all judge calls: the LLM client keeps HTTP connections bound to the
     # loop that opened them, so asyncio.run per situation fails with "Event loop is closed"
     loop = asyncio.new_event_loop()

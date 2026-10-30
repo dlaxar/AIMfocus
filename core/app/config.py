@@ -25,18 +25,25 @@ class Settings(BaseSettings):
 
     # Google's SDK convention is GOOGLE_API_KEY; GEMINI_API_KEY is accepted too
     GEMINI_API_KEY: str = Field(default="", validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
+    # Anthropic key for "claude-" models (RUNTIME_MODEL=claude-haiku-5-5 etc.)
+    CLAUDE_API_KEY: str = Field(default="", validation_alias=AliasChoices("CLAUDE_API_KEY", "ANTHROPIC_API_KEY"))
 
     # Measured 2026-10-29 on the select prompt (~29k chars): 3.8-flash default 15.7 s,
     # 3.8-flash thinking=low 9.0 s, 3.5-flash thinking=minimal 5.1 s (3.8 does not support "minimal").
     # Full runs on the 5 situations: 3.5-flash-lite (minimal) 1.2-4.9 s per complete screen,
     # 13-14 of 15 answers over 3 runs; 3.8-flash (low) 15/15 but 9.9-14.3 s.
-    RUNTIME_MODEL: str = "gemini-3.5-flash-lite"
-    RUNTIME_THINKING_LEVEL: str = "minimal"     # applied to RUNTIME_MODEL calls; "" = model default
-    # Token budget instead of a level (e.g. 0 = no thinking where the model allows it);
-    # -1 = unset. Takes precedence over RUNTIME_THINKING_LEVEL.
-    RUNTIME_THINKING_BUDGET: int = -1
+    # 2026-10-30, all 23 situations (69 questions) with the fast select call: claude-haiku-5-5
+    # without thinking 58-59/69, every screen under 8 s; 3.5-flash-lite 49/69 in under 3 s.
+    RUNTIME_MODEL: str = "claude-haiku-5-5"
+    RUNTIME_THINKING_LEVEL: str = "minimal"     # Gemini only; "" = model default
+    # Token budget instead of a level; 0 = no thinking (Haiku 5.5 and Gemini flash models
+    # allow it, Opus 5.5 does not: set -1 and RUNTIME_EFFORT=low there). -1 = unset.
+    # Takes precedence over RUNTIME_THINKING_LEVEL.
+    RUNTIME_THINKING_BUDGET: int = 0
+    # Claude only: output_config.effort for RUNTIME_MODEL calls (low | medium | high); "" = model default
+    RUNTIME_EFFORT: str = ""
     PREPROCESS_MODEL: str = "gemini-4-argon"
-    # Preprocessing: max parallel LLM calls for independent work (S2 follow-ups, S3 judges)
+    # Preprocessing: max parallel LLM calls for independent work (S2 follow-ups)
     PREPROCESS_MAX_PARALLEL: int = 6
     # S1 splits documents with more passages than this into parts extracted in parallel
     # (measured on the 133-passage letter with gemini-4-argon: 250-312 s in one call,

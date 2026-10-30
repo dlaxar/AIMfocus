@@ -193,3 +193,25 @@ class TestValidateAll:
         validated, _ = validate_all([item], _fact_getter({ef.fact_id: ef}), lambda c: [ef], [need])
         assert validated[0].screen_kind == "check"
         assert validated[0].item.fact_ids == [ef.fact_id]
+
+
+class TestUnits:
+    def _exenatide(self):
+        return _make_fact(
+            fact_id="F:T:med:09", span="Byetta Injektionslösung 5 mcg s.c. 1 0 1 0 Dosen",
+            en="Exenatide (Byetta) 5 µg subcutaneous, 1-0-1",
+            fields={"brand": "Byetta", "generic": "exenatide", "strength": "5 mcg", "schedule": "1-0-1-0"},
+        )
+
+    def test_wrong_unit_rejected(self):
+        f = self._exenatide()
+        item = AnswererItem(need_id="N1", fact_ids=[f.fact_id], text_en="Exenatide (Byetta) 5 g subcutaneous, 1-0-1", absent=False)
+        result = validate_item(item, _fact_getter({f.fact_id: f}), [])
+        assert not result.passed
+        assert any("5 g" in e for e in result.errors)
+
+    def test_microgram_spellings_are_equal(self):
+        f = self._exenatide()
+        for text in ("Exenatide 5 µg 1-0-1", "Exenatide 5 mcg 1-0-1", "Exenatide 5ug 1-0-1"):
+            item = AnswererItem(need_id="N1", fact_ids=[f.fact_id], text_en=text, absent=False)
+            assert validate_item(item, _fact_getter({f.fact_id: f}), []).passed, text

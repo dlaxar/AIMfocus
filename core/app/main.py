@@ -60,6 +60,11 @@ from app.fastpath.router import router as fastpath_router  # noqa: E402
 
 app.include_router(fastpath_router)
 
+# Questions about the patient (/api/v2/chat): one cached-prefix LLM call per question
+from app.chat.router import router as chat_router  # noqa: E402
+
+app.include_router(chat_router)
+
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------

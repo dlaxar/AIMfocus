@@ -3,10 +3,10 @@
     <AIMfocusLogo />
   </div>
 
-  <h1>What's your role,<br> and do you need?</h1>
+  <h1>What's your role, and what do you need?</h1>
 
   <div class="box">
-    <textarea v-model="form.iAm" placeholder="I am... and I need..." />
+    <textarea v-model="form.iAm" placeholder="I am... and I want..." />
     <button
       class="mic"
       :class="{ listening }"
@@ -20,6 +20,8 @@
       </svg>
     </button>
   </div>
+
+  <p class="tip" style="padding-bottom: 20px" @click="form.iAm = 'I am an anaesthetist and need a pre-op assessment for a patient having breast surgery'"><strong>Try:</strong> "I am an anaesthetist and need a pre-op assessment for a patient having breast surgery"</p>
 
   <section v-if="session.recent.length" class="recent">
     <h2>Recent</h2>
@@ -35,7 +37,9 @@
 
   <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-  <NextButton :disabled="!form.iAm.trim() || loading" @click="submit" />
+  <Teleport to="body">
+    <NextButton :disabled="!form.iAm.trim() || loading" @click="submit" />
+  </Teleport>
 </template>
 
 <script setup>
@@ -113,7 +117,7 @@ onBeforeUnmount(() => recognition?.stop())
 }
 textarea {
   width: 100%;
-  min-height: 240px;
+  min-height: 120px;
   padding: 16px 56px 16px 16px;
   resize: vertical;
 }
@@ -183,6 +187,16 @@ textarea {
 .recent .date {
   font-size: 0.8rem;
   color: var(--muted);
+}
+.tip {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.tip:hover {
+  color: var(--text);
 }
 .error {
   margin: 0;

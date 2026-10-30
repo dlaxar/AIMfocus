@@ -117,6 +117,14 @@ async def get_screen(screen_id: str, wait: bool = False) -> FastScreen:
     return screen
 
 
+@router.get("/screens/{screen_id}/summary")
+async def get_screen_summary(screen_id: str) -> dict[str, str]:
+    screen = service.get_screen(screen_id)
+    if screen is None:
+        raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
+    return await service.get_summary(screen)
+
+
 @router.get("/screens/{screen_id}/stream")
 async def stream_screen(screen_id: str) -> StreamingResponse:
     if service.get_screen(screen_id) is None:

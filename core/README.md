@@ -140,6 +140,8 @@ data/                     gitignored – IBM patient data
 | `GET` | `/api/documents/{doc_id}` | Normalized text + passages |
 | `GET` | `/api/passages/{passage_id}` | Single passage with char offsets |
 | `GET` | `/api/contradictions` | All precomputed contradictions |
+| `POST` | `/api/v2/chat` | `{"question", "chat_id"?, "screen_id"?}` → `{chat_id, answer, state, sources, fact_ids}`; pass `chat_id` back for follow-ups. `state`: `answered` / `not_documented` / `check` (failed validation, show with a warning). About 2 s with Haiku 5.5 |
+| `GET` | `/api/v2/chat/{chat_id}` | The conversation so far |
 | `GET` | `/healthz` | Cache loaded, manifest version |
 
 ---
@@ -152,10 +154,13 @@ data/                     gitignored – IBM patient data
 | `CACHE_DIR` | `./cache` | Preprocessing output (gitignored) |
 | `PATIENT_ID` | `0000-0001` | Active patient |
 | `GEMINI_API_KEY` | – | Your Google AI API key |
-| `RUNTIME_MODEL` | `gemini-3.5-flash-lite` | Runtime model (select/derive, R1/R2) |
+| `CLAUDE_API_KEY` | – | Anthropic API key, for `claude-` runtime models |
+| `RUNTIME_MODEL` | `claude-haiku-5-5` | Runtime model (select/derive, R1/R2); `gemini-…` models go to Google |
+| `RUNTIME_THINKING_BUDGET` | `0` | `0` = no thinking (Haiku 5.5, Gemini flash); `-1` = unset (needed for Opus 5.5) |
+| `RUNTIME_EFFORT` | – | Claude only: `low` / `medium` / `high` |
 | `RUNTIME_THINKING_LEVEL` | `minimal` | Gemini thinking level for runtime calls (`""` = model default) |
 | `PREPROCESS_MODEL` | `gemini-4-argon` | Model for S1/S3 |
-| `PREPROCESS_MAX_PARALLEL` | `6` | Max parallel LLM calls for S2 follow-ups and S3 judges |
+| `PREPROCESS_MAX_PARALLEL` | `6` | Max parallel LLM calls for S2 follow-ups |
 | `S1_CHUNK_PASSAGES` | `30` | S1 splits longer documents into parts extracted in parallel (`0` = one call per document) |
 | `S1_PARALLEL_DOCS` | `true` | S1 extracts all documents at once; the alias merge links their concept keys (`false` = oldest first, each document reuses earlier keys) |
 | `LLM_FAKE` | `false` | `true` in CI – returns fixture responses |

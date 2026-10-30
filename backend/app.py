@@ -79,6 +79,28 @@ def get_session_screen(session_id):
     return jsonify(_core("GET", f"/api/v2/screens/{session_id}{wait}"))
 
 
+@app.get("/api/session/<session_id>/summary")
+def get_session_summary(session_id):
+    """Ask the LLM for a short 'Role, Situation' label for this session."""
+    data = _core("GET", f"/api/v2/screens/{session_id}/summary")
+    return jsonify(data)
+
+
+@app.post("/api/session/<session_id>/chat")
+def chat_about_patient(session_id):
+    """
+    Question about the patient: {"question": ..., "chat_id": optional}. Pass the returned
+    chat_id back for follow-ups; the session's screen gives the question its context.
+    """
+    body = request.get_json(silent=True) or {}
+    if not str(body.get("question", "")).strip():
+        abort(400, "Missing 'question'")
+    payload = {"question": body["question"], "screen_id": session_id}
+    if body.get("chat_id"):
+        payload["chat_id"] = body["chat_id"]
+    return jsonify(_core("POST", "/api/v2/chat", payload))
+
+
 @app.get("/api/session/<session_id>/stream")
 def stream_session_screen(session_id):
     """Server-sent events from the core: one "screen" event per update, then "done"."""

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -88,6 +89,10 @@ class FactStore:
             df = DerivedFact.model_validate(d_raw)
             self.derived[df.fact_id] = df
 
+        age = self._age_fact()
+        if age:
+            self.derived[age.fact_id] = age
+
         # Concepts
         raw_concepts = json.loads((out_dir / "concepts.json").read_text(encoding="utf-8"))
         for c_raw in raw_concepts:
@@ -99,6 +104,8 @@ class FactStore:
         if contradictions_path.exists():
             raw_cx = json.loads(contradictions_path.read_text(encoding="utf-8"))
             self.contradictions = [Contradiction.model_validate(x) for x in raw_cx]
+            for cx in self.contradictions:
+                cx.fact_ids = self._facts_in_passages(set(cx.passage_ids))
 
         # Fact sheet (for the answerer prompt)
         fact_sheet_path = out_dir / "fact_sheet.txt"
@@ -144,6 +151,34 @@ class FactStore:
 
     def contradictions_for_concepts(self, concept_ids: set[str]) -> list[Contradiction]:
         return [cx for cx in self.contradictions if set(cx.concept_ids) & concept_ids]
+
+    def _facts_in_passages(self, passage_ids: set[str]) -> list[str]:
+        """Facts extracted from these passages or copies of them, plus derived facts built on them."""
+        def linked(pid: str) -> bool:
+            p = self.passages.get(pid)
+            return pid in passage_ids or bool(p and p.copy_of in passage_ids)
+        facts = [fid for fid, f in self.facts.items() if linked(f.passage_id)]
+        hit = set(facts)
+        return facts + [did for did, d in self.derived.items() if hit & set(d.inputs)]
+
+    def _age_fact(self) -> Optional[DerivedFact]:
+        """Age on the reference date, from the date of birth in a letter header ("geb. 15.03.1959")."""
+        ref = self.reference_date()
+        for p in self.passages.values():
+            m = re.search(r"\bgeb(?:oren|\.)?\s*(?:am\s*)?(\d{1,2})\.(\d{1,2})\.(\d{4})", p.text)
+            if not m or not ref:
+                continue
+            d, mo, y = int(m[1]), int(m[2]), int(m[3])
+            ry, rm, rd = (int(x) for x in ref[:10].split("-"))
+            age = ry - y - ((rm, rd) < (mo, d))
+            return DerivedFact(
+                fact_id="D:age",
+                en=f"Age {age} years (born {y:04d}-{mo:02d}-{d:02d})",
+                formula="age_at_reference_date",
+                fields={"passage_id": p.passage_id, "birth_date": f"{y:04d}-{mo:02d}-{d:02d}"},
+                date=ref[:10],
+            )
+        return None
 
     def reference_date(self) -> Optional[str]:
         from app.config import settings as _settings

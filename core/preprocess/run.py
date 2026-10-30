@@ -61,8 +61,8 @@ async def _run_pipeline_async(patient_id: str, from_stage: str, model: str | Non
 
     if start <= 3:
         logger.info("=== S3: Contradictions ===")
-        from preprocess import s3_contradictions
-        await s3_contradictions.run_async(cache_dir, patient_id)
+        from contradictions import run as cx
+        await cx.run_async(cache_dir, patient_id, data_dir=data_dir)
 
     if start <= 4:
         logger.info("=== S4: Export ===")

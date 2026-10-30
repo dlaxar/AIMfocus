@@ -10,10 +10,11 @@
 defineProps({ disabled: Boolean })
 </script>
 
-<style scoped>
+<style>
 .next {
-  align-self: flex-end;
-  margin-top: auto;
+  position: fixed;
+  bottom: 32px;
+  right: 24px;
   width: 56px;
   height: 56px;
   border: none;
@@ -23,6 +24,7 @@ defineProps({ disabled: Boolean })
   display: grid;
   place-items: center;
   cursor: pointer;
+  z-index: 10;
 }
 .next:disabled {
   opacity: 0.35;
