@@ -6,7 +6,7 @@
   <h1>What's your role, and what do you need?</h1>
 
   <div class="box">
-    <textarea v-model="form.iAm" placeholder="I am... and I want..." />
+    <textarea v-model="form.iAm" placeholder="I am... and I want..." @keydown.enter="onEnter" />
     <button
       class="mic"
       :class="{ listening }"
@@ -20,6 +20,8 @@
       </svg>
     </button>
   </div>
+
+  <p class="hint"><kbd>Enter</kbd> to continue · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
 
   <p class="tip" style="padding-bottom: 20px" @click="form.iAm = tips[tipIndex]" @mouseenter="tipPaused = true" @mouseleave="tipPaused = false">
     <strong>Try: </strong>
@@ -72,6 +74,13 @@ async function submit() {
   } finally {
     loading.value = false
   }
+}
+
+// Enter submits like the next button; Shift+Enter (or an IME composition) inserts a newline as usual.
+function onEnter(e) {
+  if (e.shiftKey || e.isComposing) return
+  e.preventDefault()
+  submit()
 }
 
 function resume(id) {
@@ -235,6 +244,19 @@ textarea {
 .recent .date {
   font-size: 0.8rem;
   color: var(--muted);
+}
+.hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: right;
+}
+.hint kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.7rem;
 }
 .tip {
   margin: 0;
