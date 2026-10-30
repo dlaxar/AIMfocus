@@ -296,6 +296,59 @@ language of the question, names contradictions, and gives no treatment advice. E
 empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
 `GET /api/v2/chat/<chat_id>` on the core.
 
+### Chat with cards
+
+Add `"cards": true` and the reply carries, besides the text answer, the **cards** that answer
+the question – the same `ScreenVariable` objects as on a screen (section 3): the model picks
+1–4 variables with their output type, the values are pulled from the documents by code, and
+a check that is missing comes back as `state: "not_documented"` with `headline.text: "Not
+documented"`. Render them with the screen renderers.
+
+```
+POST /api/session/<session_id>/chat
+{"question": "How has her weight changed?", "cards": true}
+```
+
+```jsonc
+{
+  "chat_id": "3f9a1c0b7e21",
+  "answer": "Her weight fell from 78 kg (2015-06-28) to 66 kg (2016-04-15), a documented change of -12 kg.",
+  "state": "answered",
+  "sources": [Source, …],
+  "fact_ids": ["F:12340012:mea:05", "F:12340018:mea:03"],
+  "cards_status": "complete",
+  "cards_screen_id": "9c41e0a7b2d3",
+  "cards": [
+    {"name": "weight_trend", "label": "Weight trend", "priority": 1, "tier": "critical", "output": "trend",
+     "state": "documented", "headline": {"text": "66 kg", "date": "2016-04-15", "change": "-12 kg since 2015-06-28"},
+     "series": [{"name": "Body weight", "unit": "kg", "code": {"system": "LOINC", "code": "29463-7", …},
+                 "points": [{"date": "2015-06-28", "value": 78, "source": Source, "contradiction_ids": ["X:cf:bmi_12340012_p038"]}, …]}],
+     "contradictions": [ContradictionRef, …], "sources": [Source, …]}
+  ],
+  "timings_ms": {"llm": 2300, "cards": 2800, "total": 2800}
+}
+```
+
+| Request field | Default | Meaning |
+|---|---|---|
+| `cards` | `false` | also return cards; without it the chat answers in text only, as before |
+| `wait` | `true` | `true`: the finished cards are in this reply. `false`: the reply comes as soon as the text is ready, with `cards: []` and `cards_screen_id` – stream the cards with `GET /api/session/<cards_screen_id>/stream` (or `/api/v2/screens/<id>/stream` on the core) |
+
+Examples from the live test (Haiku 5.5, 12 questions × 2 runs, all as expected):
+
+| Question | Card |
+|---|---|
+| How has her weight changed? | `trend` with the weight points (and BMI) |
+| Show her blood pressure over time. | `trend`, systolic and diastolic series, headline 145/88 mmHg |
+| Which medicines does she take? | `table`, 8 rows (item, strength, schedule) |
+| What is her latest HbA1c? | `value` HbA1c 6.4% |
+| Which open follow-ups are there? | `list` with `status: "open"` / `"done"` |
+| Is her kidney function documented? | `value`, `state: "not_documented"` |
+| Since when? (follow-up to the blood thinner) | `list` with the aspirin start in 2015 |
+
+Timing: text answer about 1.6 s on average; the reply with cards about 2.5 s (single outliers up
+to about 12 s when a text search is slow – use `wait: false` if the text must come first).
+
 ## 8. Rendering checklist
 
 - Sort cards by `priority`; render `critical` first and prominently, `background` collapsed.

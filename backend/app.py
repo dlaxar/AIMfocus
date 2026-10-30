@@ -98,6 +98,9 @@ def chat_about_patient(session_id):
     payload = {"question": body["question"], "screen_id": session_id}
     if body.get("chat_id"):
         payload["chat_id"] = body["chat_id"]
+    for key in ("cards", "wait"):   # cards=true: also screen cards for the question
+        if key in body:
+            payload[key] = bool(body[key])
     return jsonify(_core("POST", "/api/v2/chat", payload))
 
 

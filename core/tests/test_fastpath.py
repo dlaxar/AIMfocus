@@ -186,6 +186,13 @@ class TestDeriveValidation:
         assert any("quote" in e for e in errors)
         assert any("1.4" in e for e in errors)
 
+    def test_absence_statement_versus_negative_finding(self, client):
+        from app.fastpath.service import _ABSENCE
+        assert _ABSENCE.search("No CPAP therapy is documented.")
+        assert _ABSENCE.search("Kidney function is not reported as a value")
+        assert not _ABSENCE.search("No focal neurological deficits on admission")
+        assert not _ABSENCE.search("Normal LV function, no pericardial effusion")
+
     def test_unknown_passage_rejected(self, client):
         from app.fastpath.models import DeriveOutput
         from app.fastpath.service import _check_derive

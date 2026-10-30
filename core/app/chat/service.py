@@ -102,12 +102,16 @@ def _check(out: ChatAnswer, store: FactStore) -> tuple[list[str], list[str], lis
 
 
 async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
-              screen_id: Optional[str] = None) -> ChatReply:
+              screen_id: Optional[str] = None, cards: bool = False, wait: bool = False) -> ChatReply:
     t0 = time.perf_counter()
     chat = _chats.get(chat_id or "") or Chat(chat_id=uuid.uuid4().hex[:12], screen_id=screen_id)
     if screen_id:
         chat.screen_id = screen_id
     _chats[chat.chat_id] = chat
+
+    # Cards: a small screen for this question, built in the background like any screen
+    # (select → analytic pull → text search), so the text answer is not slowed down
+    card_screen = await fastpath.create_screen(_card_situation(question, chat), store) if cards else None
 
     out: ChatAnswer = await get_client().generate(
         prompt_name="chat",
@@ -137,7 +141,28 @@ async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
 
     chat.messages.append(ChatMessage(role="user", content=question))
     chat.messages.append(ChatMessage(role="assistant", content=answer, state=state, sources=sources))
-    return ChatReply(
+    reply = ChatReply(
         chat_id=chat.chat_id, answer=answer, state=state, sources=sources, fact_ids=fact_ids, note=note,
-        timings_ms={"llm": t_llm, "total": fastpath._elapsed_ms(t0)},
+        timings_ms={"llm": t_llm},
     )
+    if card_screen is not None:
+        if wait:
+            card_screen = await fastpath.wait_for(card_screen.screen_id, timeout_s=CARDS_WAIT_S) or card_screen
+            reply.cards = list(card_screen.variables)
+            reply.timings_ms["cards"] = card_screen.timings_ms.get("complete") or fastpath._elapsed_ms(t0)
+        reply.cards_screen_id, reply.cards_status = card_screen.screen_id, card_screen.status
+    reply.timings_ms["total"] = fastpath._elapsed_ms(t0)
+    return reply
+
+
+CARDS_WAIT_S = 20.0
+
+
+def _card_situation(question: str, chat: Chat) -> str:
+    """The question as a situation for the select call, with the role and the last exchange."""
+    screen = fastpath.get_screen(chat.screen_id) if chat.screen_id else None
+    role = f" The clinician is: {screen.role} ({screen.task})." if screen and screen.role else ""
+    last = [m for m in chat.messages[-2:]]
+    earlier = (f" Earlier: they asked \"{last[0].content}\", answer: \"{last[1].content}\"."
+               if len(last) == 2 and last[0].role == "user" else "")
+    return f"Question about the patient: {question}.{role}{earlier}"

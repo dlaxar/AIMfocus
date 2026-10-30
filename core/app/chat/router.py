@@ -1,7 +1,8 @@
 """
 app/chat/router.py – questions about the patient, mounted under /api/v2.
 
-  POST /api/v2/chat              {"question", "chat_id"?, "screen_id"?} → answer with sources
+  POST /api/v2/chat              {"question", "chat_id"?, "screen_id"?, "cards"?, "wait"?} → answer with sources
+                                 (cards=true: also screen cards for the question, see docs/screen-api.md)
                                  (pass the returned chat_id back for follow-up questions)
   GET  /api/v2/chat/{chat_id}    the conversation so far
 """
@@ -23,7 +24,7 @@ async def ask(req: ChatRequest) -> ChatReply:
     if req.chat_id and service.get_chat(req.chat_id) is None:
         raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found")
     try:
-        return await service.ask(req.question.strip(), get_store(), req.chat_id, req.screen_id)
+        return await service.ask(req.question.strip(), get_store(), req.chat_id, req.screen_id, req.cards, req.wait)
     except Exception as exc:  # quota / network: say so instead of a bare 500
         raise HTTPException(status_code=502, detail=f"Could not answer: {type(exc).__name__}") from exc
 

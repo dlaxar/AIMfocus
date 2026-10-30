@@ -56,6 +56,39 @@ class TestChat:
         assert client.post("/api/v2/chat", json={"question": "  "}).status_code == 400
 
 
+class TestChatCards:
+    def test_cards_come_in_the_reply_with_type_and_state(self, client):
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True}).json()
+        assert out["answer"] and out["cards_status"] == "complete"
+        cards = {c["name"]: c for c in out["cards"]}
+        assert cards["contrast_allergy"]["state"] == "documented" and cards["contrast_allergy"]["headline"]["text"]
+        assert cards["contrast_allergy"]["latest"][0]["source"]["doc_id"] == "TEST001"
+        assert cards["kidney_function"]["state"] == "not_documented"          # said, not left out
+        assert cards["kidney_function"]["headline"]["text"] == "Not documented"
+        assert all(c["output"] in ("value", "trend", "table", "list", "image") for c in out["cards"])
+        assert "cards" in out["timings_ms"]
+
+    def test_cards_can_be_streamed_instead(self, client):
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True, "wait": False}).json()
+        assert out["cards"] == [] and out["cards_screen_id"]
+        screen = client.get(f"/api/v2/screens/{out['cards_screen_id']}?wait=true").json()
+        assert screen["status"] == "complete" and screen["variables"]
+
+    def test_no_cards_unless_asked(self, client):
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?"}).json()
+        assert out["cards"] == [] and out["cards_screen_id"] is None
+
+    def test_card_question_carries_role_and_last_exchange(self, client):
+        from app.chat import service
+        from app.chat.models import Chat, ChatMessage
+
+        chat = Chat(chat_id="c2", messages=[ChatMessage(role="user", content="Which blood thinner?"),
+                                            ChatMessage(role="assistant", content="Aspirin 100 mg")])
+        text = service._card_situation("Since when?", chat)
+        assert text.startswith("Question about the patient: Since when?")
+        assert "Which blood thinner?" in text and "Aspirin 100 mg" in text
+
+
 class TestChatValidation:
     def test_number_not_in_the_cited_facts_is_flagged(self, client):
         from app.chat.models import ChatAnswer

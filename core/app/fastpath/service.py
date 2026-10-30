@@ -370,6 +370,11 @@ def _check_derive(out: DeriveOutput, store: FactStore) -> list[str]:
     return errors
 
 
+# A statement that something is missing from the record – not a documented negative finding
+# ("No focal deficits on admission" is a finding and stays one)
+_ABSENCE = re.compile(r"not documented|no record|not (?:reported|mentioned|listed|recorded)|\bno\b[^.]*\bdocumented\b", re.I)
+
+
 def _letter_date_numbers(passages: list, store: FactStore) -> set[str]:
     numbers: set[str] = set()
     for p in passages:
@@ -413,7 +418,13 @@ async def _derive_one(
             var.note = "No passage in the documents covers this"
         else:
             errors = _check_derive(out, store)
-            if errors:
+            if errors and _ABSENCE.search(out.value or ""):
+                # "No CPAP therapy is documented" with a quote that does not match: there is
+                # no evidence it is documented, which is what "not documented" means
+                logger.info("fastpath: derive for %s says absent, citation failed – not documented", var.name)
+                var.state, var.value = "not_documented", "Not documented"
+                var.note = "The text search found no statement of it"
+            elif errors:
                 logger.warning("fastpath: derive result for %s rejected: %s", var.name, errors)
                 var.state = "check"
                 var.value = "Answer could not be verified against the documents"
