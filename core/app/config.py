@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     RUNTIME_THINKING_BUDGET: int = 0
     # Claude only: output_config.effort for RUNTIME_MODEL calls (low | medium | high); "" = model default
     RUNTIME_EFFORT: str = ""
+    # Second, slower model started with every screen; when it is done, its screen replaces the
+    # fast one under the same ID ("" = off). Opus 5.5 cannot turn thinking off: depth is set by
+    # UPGRADE_EFFORT (output_config.effort, "low" is the lowest), and no thinking parameter is sent.
+    UPGRADE_MODEL: str = "claude-opus-5-5"
+    UPGRADE_EFFORT: str = "low"
     PREPROCESS_MODEL: str = "gemini-4-argon"
     # Preprocessing: max parallel LLM calls for independent work (S2 follow-ups)
     PREPROCESS_MAX_PARALLEL: int = 6

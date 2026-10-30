@@ -174,3 +174,37 @@ class TestImages:
         assert var.state == "documented" and var.output == "image"
         assert var.items[0].source.image.image_id == UID
         assert _image_variable(sel, get_store("TEST"), "2020-01-02", 0.0) is None   # letters only → not_available
+
+
+class TestPortablePaths:
+    def test_paths_are_stored_relative_to_data_dir(self, monkeypatch, tmp_path):
+        from app import images
+        from app.config import settings
+        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+        f = tmp_path / "coherent" / "P1" / "dicom" / "x.dcm"
+        f.parent.mkdir(parents=True)
+        f.write_bytes(b"")
+        assert images.relative_to_data(f) == "coherent/P1/dicom/x.dcm"
+        assert images.dicom_path("coherent/P1/dicom/x.dcm") == f
+
+    def test_absolute_path_from_another_machine_is_rebased(self, monkeypatch, tmp_path):
+        from app import images
+        from app.config import settings
+        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+        f = tmp_path / "coherent" / "P1" / "dicom" / "x.dcm"
+        f.parent.mkdir(parents=True)
+        f.write_bytes(b"")
+        assert images.dicom_path("/home/someone/repo/data/coherent/P1/dicom/x.dcm") == f
+
+    def test_missing_dicom_is_404_but_preview_works(self, client):
+        from app.store import get_store
+        info = get_store(PID).images[UID]
+        real = info["dicom"]
+        info["dicom"] = "/nowhere/data/missing.dcm"
+        try:
+            base = f"/api/v2/patients/{PID}/images/{UID}"
+            assert client.get(f"{base}/dicom").status_code == 404
+            assert client.get(f"{base}/slice.png").status_code == 404
+            assert client.get(f"{base}/preview.png").status_code == 200
+        finally:
+            info["dicom"] = real

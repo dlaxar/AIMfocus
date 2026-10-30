@@ -47,8 +47,9 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = Path(__file__).parent.parent / "llm" / "prompts"
 
-_screens: dict[str, FastScreen] = {}
+_screens: dict[str, FastScreen] = {}      # screen_id → the screen shown (fast, later the upgrade)
 _tasks: dict[str, asyncio.Task] = {}
+_upgrade_tasks: dict[str, asyncio.Task] = {}
 
 
 def _prompt(name: str) -> str:
@@ -160,7 +161,7 @@ def passages_block(store: FactStore) -> str:
 # Step 1: select
 # ---------------------------------------------------------------------------
 
-async def _select(situation: str, store: FactStore, reference_date: str) -> SelectOutput:
+async def _select(situation: str, store: FactStore, reference_date: str, model: str = "") -> SelectOutput:
     cat = catalogue(store)
     # Everything before the situation is the same for every screen, so it is sent as a
     # cacheable first part (prompt caching on Claude, implicit caching on Gemini)
@@ -173,7 +174,7 @@ async def _select(situation: str, store: FactStore, reference_date: str) -> Sele
         messages=[{"role": "user", "content": [{"text": fixed, "cache": True}, {"text": situation_part}]}],
         response_schema=PickOutput,
         temperature=0.0,
-        model=settings.RUNTIME_MODEL,
+        model=model or settings.RUNTIME_MODEL,
     )
     # Priority is a unique rank: critical first, then the model's own order within each tier
     ranked = sorted(enumerate(out.variables), key=lambda iv: (_TIER_RANK[iv[1].tier], iv[0]))
@@ -434,7 +435,7 @@ async def _derive_one(
                 messages=[{"role": "user", "content": [{"text": fixed, "cache": True}, {"text": variable_part}]}],
                 response_schema=DeriveOutput,
                 temperature=0.0,
-                model=settings.RUNTIME_MODEL,
+                model=screen.model or settings.RUNTIME_MODEL,
             )
     except Exception as exc:  # network / quota / schema errors must not kill the screen
         logger.exception("fastpath: derive failed for %s", var.name)
@@ -502,30 +503,62 @@ def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
 # ---------------------------------------------------------------------------
 
 async def create_screen(situation: str, store: FactStore, max_variables: Optional[int] = None,
-                        shown_fact_ids: frozenset = frozenset()) -> FastScreen:
+                        shown_fact_ids: frozenset = frozenset(), upgrade: bool = False) -> FastScreen:
     """
     Register a screen and return it at once (status "starting", no variables yet), so the
     caller gets its ID without waiting for an LLM call. Select and derive run in the
     background; the screen object is filled in place.
+
+    upgrade: also build the screen with UPGRADE_MODEL in parallel; when that one is done it
+    replaces the fast screen under the same ID (see _upgrade).
     """
     t0 = time.perf_counter()
     reference_date = store.reference_date() or ""
     screen = FastScreen(
         screen_id=uuid.uuid4().hex[:12],
         patient_id=store.patient_id,
+        model=settings.RUNTIME_MODEL,
         situation=situation,
         reference_date=reference_date or None,
     )
     _screens[screen.screen_id] = screen
     _tasks[screen.screen_id] = asyncio.create_task(_build(screen, store, t0, max_variables, shown_fact_ids))
+    if upgrade and settings.UPGRADE_MODEL and settings.UPGRADE_MODEL != settings.RUNTIME_MODEL:
+        screen.upgrade = "running"
+        _upgrade_tasks[screen.screen_id] = asyncio.create_task(_upgrade(screen, store, t0))
     return screen
+
+
+async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
+    """
+    The same screen built with UPGRADE_MODEL, in its own object. When it is complete it is
+    shown instead of the fast one: same screen_id, a higher version, the whole screen (the
+    frontend works out what changed). If it fails, the fast screen stays (upgrade "failed").
+    """
+    slow = FastScreen(screen_id=fast.screen_id, patient_id=fast.patient_id, model=settings.UPGRADE_MODEL,
+                      situation=fast.situation, reference_date=fast.reference_date)
+    try:
+        await _build(slow, store, t0)
+    except Exception:   # _build reports its own failures on the screen; this is the safety net
+        logger.exception("fastpath: upgrade failed for screen %s", fast.screen_id)
+        slow.error = slow.error or "upgrade failed"
+    if slow.error or not slow.variables:
+        logger.warning("fastpath: upgrade of screen %s not used: %s", fast.screen_id, slow.error or "no variables")
+        fast.upgrade = "failed"
+        fast.version += 1
+        return
+    slow.timings_ms.update({f"fast_{k}": v for k, v in fast.timings_ms.items()})
+    slow.upgrade = "done"
+    slow.version = max(slow.version, fast.version) + 1
+    _screens[fast.screen_id] = slow
+    logger.info("fastpath: screen %s now shows %s (%.1f s)", fast.screen_id, slow.model, _elapsed_ms(t0) / 1000)
 
 
 async def _build(screen: FastScreen, store: FactStore, t0: float, max_variables: Optional[int] = None,
                  shown_fact_ids: frozenset = frozenset()) -> None:
     """max_variables / shown_fact_ids: chat cards – at most that many, nothing the screen already shows."""
     try:
-        selected = await _select(screen.situation, store, screen.reference_date or "")
+        selected = await _select(screen.situation, store, screen.reference_date or "", screen.model)
     except Exception as exc:  # the ID is already out: report the failure on the screen
         logger.exception("fastpath: select failed for screen %s", screen.screen_id)
         screen.error = f"Could not prepare the screen: {type(exc).__name__}"
@@ -571,15 +604,15 @@ def get_screen(screen_id: str) -> Optional[FastScreen]:
     return _screens.get(screen_id)
 
 
-async def wait_for(screen_id: str, timeout_s: float = 60.0) -> Optional[FastScreen]:
+async def wait_for(screen_id: str, timeout_s: float = 60.0, final: bool = False) -> Optional[FastScreen]:
     """
-    Wait until the screen is complete (tests / ?wait=true). After `timeout_s` the screen
-    is returned as it stands (status "starting" or "partial") instead of failing.
+    Wait until the screen is complete (tests / ?wait=true); final=True also waits for the
+    upgrade run. After `timeout_s` the screen is returned as it stands instead of failing.
     """
-    task = _tasks.get(screen_id)
-    if task is not None:
+    tasks = [t for t in (_tasks.get(screen_id), _upgrade_tasks.get(screen_id) if final else None) if t is not None]
+    if tasks:
         try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=timeout_s)
+            await asyncio.wait_for(asyncio.shield(asyncio.gather(*tasks)), timeout=timeout_s)
         except asyncio.TimeoutError:
             logger.warning("fastpath: screen %s not complete after %.0f s", screen_id, timeout_s)
     return _screens.get(screen_id)

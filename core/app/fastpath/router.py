@@ -10,8 +10,13 @@ app/fastpath/router.py – REST API for the fast path, mounted under /api/v2.
   POST /api/v2/screens                    {"situation": ...} → 202 with the screen ID at once
   GET  /api/v2/screens?situation=...      same, for quick tests from a browser / curl
   GET  /api/v2/screens/{id}[?wait=true]   current state; wait=true blocks until complete
-  GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update, then "done"
+                                          (&final=true: also until the upgrade run is done)
+  GET  /api/v2/screens/{id}/stream        SSE: a "screen" event per update (the whole screen,
+                                          also when the upgrade replaces it), then "done"
   GET  /api/v2/simulated/stream[?interval=1]  same SSE, replaying the recorded screens in streams/
+
+  Every screen is built twice in parallel: RUNTIME_MODEL (fast, shown first) and UPGRADE_MODEL
+  (slower); the slower one replaces the fast one under the same ID when it is done.
 """
 from __future__ import annotations
 
@@ -99,10 +104,10 @@ async def get_fact(fact_id: str, patient_id: Optional[str] = None) -> dict[str, 
 # Screens
 # ---------------------------------------------------------------------------
 
-async def _create(situation: str, patient_id: Optional[str]) -> JSONResponse:
+async def _create(situation: str, patient_id: Optional[str], upgrade: bool = True) -> JSONResponse:
     if not situation.strip():
         raise HTTPException(status_code=422, detail="situation must not be empty")
-    screen = await service.create_screen(situation, store_for(patient_id))
+    screen = await service.create_screen(situation, store_for(patient_id), upgrade=upgrade)
     code = 200 if screen.status == "complete" else 202
     return JSONResponse(
         status_code=code,
@@ -113,17 +118,18 @@ async def _create(situation: str, patient_id: Optional[str]) -> JSONResponse:
 
 @router.post("/screens", response_model=FastScreen, status_code=202)
 async def post_screen(req: ScreenRequest) -> JSONResponse:
-    return await _create(req.situation, req.patient_id)
+    return await _create(req.situation, req.patient_id, req.upgrade)
 
 
 @router.get("/screens", response_model=FastScreen)
-async def get_screen_by_situation(situation: str = Query(..., min_length=1), patient_id: Optional[str] = None) -> JSONResponse:
-    return await _create(situation, patient_id)
+async def get_screen_by_situation(situation: str = Query(..., min_length=1), patient_id: Optional[str] = None,
+                                  upgrade: bool = True) -> JSONResponse:
+    return await _create(situation, patient_id, upgrade)
 
 
 @router.get("/screens/{screen_id}", response_model=FastScreen)
-async def get_screen(screen_id: str, wait: bool = False) -> FastScreen:
-    screen = await service.wait_for(screen_id) if wait else service.get_screen(screen_id)
+async def get_screen(screen_id: str, wait: bool = False, final: bool = False) -> FastScreen:
+    screen = await service.wait_for(screen_id, final=final) if wait else service.get_screen(screen_id)
     if screen is None:
         raise HTTPException(status_code=404, detail=f"Screen '{screen_id}' not found")
     return screen
@@ -151,7 +157,7 @@ async def stream_screen(screen_id: str) -> StreamingResponse:
             if screen.version != last_version:
                 last_version = screen.version
                 yield f"event: screen\ndata: {service.screen_json(screen)}\n\n"
-            if screen.status == "complete":
+            if screen.status == "complete" and screen.upgrade != "running":
                 yield "event: done\ndata: {}\n\n"
                 return
             await asyncio.sleep(0.2)

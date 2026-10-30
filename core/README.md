@@ -75,6 +75,7 @@ LLM_FAKE=true pytest tests/ -v
 uvicorn app.main:app --port 8001 &
 python -m eval.run_eval          # 5 standard situations
 python -m eval.run_eval --extra  # + 5 extra situations
+python -m eval.run_additional    # team questions (24 situations, 72 questions; Opus judge)
 ```
 
 ---
@@ -111,6 +112,7 @@ core/
     test_smoke.py         End-to-end smoke test (LLM_FAKE=true)
   eval/
     run_eval.py           Evaluation harness → markdown table
+    run_additional.py     Team questions (AIMfocus_test_questions_additional.csv): screens, upgrade, chat
     situations_extra.md   5 additional role situations
 cache/                    gitignored – preprocessing output
 data/                     gitignored – IBM patient data
@@ -166,6 +168,10 @@ chat): [docs/screen-api.md](docs/screen-api.md).
 | `POST` | `/api/v2/chat` | `{"question", "chat_id"?, "screen_id"?}` → `{chat_id, answer, state, sources, fact_ids}`; pass `chat_id` back for follow-ups. `state`: `answered` / `not_documented` / `check` (failed validation, show with a warning). About 2 s with Haiku 5.5 |
 | `GET` | `/api/v2/chat/{chat_id}` | The conversation so far |
 | `GET` | `/healthz` | Cache loaded, manifest version |
+
+Screens are built twice in parallel: `RUNTIME_MODEL` (Haiku 5.5, shown first) and
+`UPGRADE_MODEL` (Opus 5.5, `UPGRADE_EFFORT=low`); the Opus screen replaces the fast one under
+the same ID when it is done (`upgrade: running → done`). `UPGRADE_MODEL=` switches it off.
 
 Every patient-specific route takes `patient_id` (query, or in the POST body of screens and
 chat); without it the default patient (`PATIENT_ID`) is used. Stores load on first use.
