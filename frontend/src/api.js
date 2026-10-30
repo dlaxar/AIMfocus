@@ -61,10 +61,10 @@ export function askChat(sessionId, question, chatId, handlers) {
   const handle = { answer: handlers.onAnswer, cards: handlers.onCards, error: (d) => handlers.onError?.(d.detail) }
 
   ;(async () => {
-    const res = await fetch(`${BASE_URL}/session/${encodeURIComponent(sessionId)}/chat/stream`, {
+    const res = await fetch(`${BASE_URL}/v2/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, cards: true, ...(chatId ? { chat_id: chatId } : {}) }),
+      body: JSON.stringify({ question, screen_id: sessionId, cards: true, ...(chatId ? { chat_id: chatId } : {}) }),
       signal: controller.signal,
     })
     if (!res.ok) throw new Error(`Chat request failed (${res.status})`)
