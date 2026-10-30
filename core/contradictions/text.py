@@ -32,7 +32,7 @@ _MONTHS_EN = (
 
 # "05.02.2020", "05/02/2020", "09/02/20200": the year group is open-ended on purpose,
 # so impossible dates are found instead of being cut to a plausible prefix
-_NUMERIC_DATE = re.compile(r"(?<![\d./])(\d{1,2})([./])(\d{1,2})\2(\d{2,})(?!\d)")
+_NUMERIC_DATE = re.compile(r"(?<![\d./])(\d{1,2})([./])(\d{1,2})\2(\d{2,})(?!\d|\.\d)")   # not the start of an OID such as 1.2.840.10008…
 _TEXT_DATE = re.compile(
     r"(?<!\d)(\d{1,2})\.\s*(" + "|".join(_MONTHS_DE) + r")\s+(\d{4})(?!\d)",
     re.IGNORECASE,

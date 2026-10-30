@@ -21,6 +21,7 @@ ICD10 = "http://fhir.de/CodeSystem/bfarm/icd-10-gm"
 ATC = "http://www.whocc.no/atc"
 LOINC = "http://loinc.org"
 SNOMED = "http://snomed.info/sct"
+RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm"
 UCUM = "http://unitsofmeasure.org"
 
 

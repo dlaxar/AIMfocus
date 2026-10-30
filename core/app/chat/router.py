@@ -15,21 +15,34 @@ import json
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.fastpath import service as fastpath
 from app.chat import service
 from app.chat.models import Chat, ChatReply, ChatRequest
-from app.store import get_store
+from app.fastpath.router import store_for
+from app.store import FactStore
 
 router = APIRouter(prefix="/api/v2", tags=["chat"])
+
+
+def _patient_store(req: ChatRequest) -> FactStore:
+    """The patient asked about: given explicitly, else the one of the chat or of the screen."""
+    if req.chat_id and service.get_chat(req.chat_id) is None:
+        raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found")
+    chat = service.get_chat(req.chat_id) if req.chat_id else None
+    screen = fastpath.get_screen(req.screen_id) if req.screen_id else None
+    known = {p for p in (chat.patient_id if chat else "", screen.patient_id if screen else "") if p}
+    if req.patient_id and known - {req.patient_id} or len(known) > 1:
+        raise HTTPException(status_code=400, detail="chat, screen and patient_id belong to different patients")
+    return store_for(req.patient_id or next(iter(known), None))
 
 
 @router.post("/chat", response_model=ChatReply)
 async def ask(req: ChatRequest) -> ChatReply:
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Empty question")
-    if req.chat_id and service.get_chat(req.chat_id) is None:
-        raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found")
+    store = _patient_store(req)
     try:
-        return await service.ask(req.question.strip(), get_store(), req.chat_id, req.screen_id, req.cards, req.wait)
+        return await service.ask(req.question.strip(), store, req.chat_id, req.screen_id, req.cards, req.wait)
     except Exception as exc:  # quota / network: say so instead of a bare 500
         raise HTTPException(status_code=502, detail=f"Could not answer: {type(exc).__name__}") from exc
 
@@ -39,12 +52,11 @@ async def ask_stream(req: ChatRequest) -> StreamingResponse:
     """Answer first, cards as they come (cards default to on here)."""
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Empty question")
-    if req.chat_id and service.get_chat(req.chat_id) is None:
-        raise HTTPException(status_code=404, detail=f"Chat '{req.chat_id}' not found")
+    store = _patient_store(req)
     cards = req.cards or "cards" not in req.model_fields_set
 
     async def events():
-        async for name, data in service.stream(req.question.strip(), get_store(), req.chat_id, req.screen_id, cards):
+        async for name, data in service.stream(req.question.strip(), store, req.chat_id, req.screen_id, cards):
             yield f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")

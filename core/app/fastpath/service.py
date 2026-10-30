@@ -130,14 +130,14 @@ class Catalogue:
         return self.handles.get(handle.strip(), handle.strip())
 
 
-_catalogues: dict[int, Catalogue] = {}
+_catalogues: dict[str, tuple[int, Catalogue]] = {}   # patient → (id of its store, catalogue)
 
 
 def catalogue(store: FactStore) -> Catalogue:
-    if id(store) not in _catalogues:
-        _catalogues.clear()  # one store per process; a reload replaces it
-        _catalogues[id(store)] = Catalogue(store)
-    return _catalogues[id(store)]
+    cached = _catalogues.get(store.patient_id)
+    if cached is None or cached[0] != id(store):   # first use, or the store was reloaded
+        cached = _catalogues[store.patient_id] = (id(store), Catalogue(store))
+    return cached[1]
 
 
 def _name(label: str) -> str:
@@ -209,12 +209,16 @@ def _sources_for_facts(fact_ids: list[str], store: FactStore) -> list[Source]:
     """
     sources: list[Source] = []
     seen: set[str] = set()
+    from app.images import image_ref
     for fid in fact_ids:
-        for pid in _own_passage_ids(fid, store) + [_best_passage_id(fid, store)]:
+        own = _own_passage_ids(fid, store)
+        for pid in own + [_best_passage_id(fid, store)]:
             if pid and pid not in seen:
                 seen.add(pid)
                 src = _build_source(pid, store)
                 if src:
+                    if pid in own:   # an imaging study's own passage links its image
+                        src.image = image_ref(store.get_any_fact(fid), store)
                     sources.append(src)
     return sources
 
@@ -342,6 +346,29 @@ def _documented_variable(
         value=render_value(facts),
         fact_ids=fact_ids, sources=_sources_for_facts(fact_ids, store),
         priority=v.priority, tier=v.tier, output=v.output, resolved_ms=_elapsed_ms(t0),
+    )
+    shape.shape_documented(var, v, facts, store, reference_date)
+    return var
+
+
+def _image_variable(
+    v: SelectedVariable, store: FactStore, reference_date: str, t0: float,
+) -> Optional[ScreenVariable]:
+    """The imaging studies chosen that have an image (else every one that has), newest first.
+    None → the record holds no image."""
+    if not store.images:
+        return None
+    def imaged(facts):
+        return [f for f in facts if f.fields.get("image_id") in store.images]
+    facts = imaged(resolve_facts(v, store, reference_date)) or imaged(store.facts.values())
+    if not facts:
+        return None
+    facts = sorted(facts, key=lambda f: f.date or "", reverse=True)
+    fact_ids = [f.fact_id for f in facts]
+    var = ScreenVariable(
+        name=v.name, label=v.label, state="documented", value=render_value(facts),
+        fact_ids=fact_ids, sources=_sources_for_facts(fact_ids, store),
+        priority=v.priority, tier=v.tier, output="image", resolved_ms=_elapsed_ms(t0),
     )
     shape.shape_documented(var, v, facts, store, reference_date)
     return var
@@ -487,7 +514,8 @@ def _relevant_contradictions(screen: FastScreen, store: FactStore):
 # Public API
 # ---------------------------------------------------------------------------
 
-async def create_screen(situation: str, store: FactStore) -> FastScreen:
+async def create_screen(situation: str, store: FactStore, max_variables: Optional[int] = None,
+                        shown_fact_ids: frozenset = frozenset()) -> FastScreen:
     """
     Register a screen and return it at once (status "starting", no variables yet), so the
     caller gets its ID without waiting for an LLM call. Select and derive run in the
@@ -497,15 +525,18 @@ async def create_screen(situation: str, store: FactStore) -> FastScreen:
     reference_date = store.reference_date() or ""
     screen = FastScreen(
         screen_id=uuid.uuid4().hex[:12],
+        patient_id=store.patient_id,
         situation=situation,
         reference_date=reference_date or None,
     )
     _screens[screen.screen_id] = screen
-    _tasks[screen.screen_id] = asyncio.create_task(_build(screen, store, t0))
+    _tasks[screen.screen_id] = asyncio.create_task(_build(screen, store, t0, max_variables, shown_fact_ids))
     return screen
 
 
-async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
+async def _build(screen: FastScreen, store: FactStore, t0: float, max_variables: Optional[int] = None,
+                 shown_fact_ids: frozenset = frozenset()) -> None:
+    """max_variables / shown_fact_ids: chat cards – at most that many, nothing the screen already shows."""
     try:
         selected = await _select(screen.situation, store, screen.reference_date or "")
     except Exception as exc:  # the ID is already out: report the failure on the screen
@@ -519,13 +550,20 @@ async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
     screen.role, screen.task = selected.role, selected.task
     screen.timings_ms["select"] = _elapsed_ms(t0)
     for v in sorted(selected.variables, key=lambda v: v.priority):
-        if v.output == "image":   # the documents hold text only
-            screen.variables.append(ScreenVariable(
-                name=v.name, label=v.label, state="not_available", priority=v.priority, tier=v.tier,
-                output="image", headline=Headline(text="No images in the documents"), resolved_ms=_elapsed_ms(t0),
-            ))
-            continue
-        documented = _documented_variable(v, store, screen.reference_date or "", t0)
+        if max_variables is not None and len(screen.variables) >= max_variables:
+            break
+        if v.output == "image":
+            documented = _image_variable(v, store, screen.reference_date or "", t0)
+            if documented is None:   # the record holds no image (the IBM letters are text only)
+                screen.variables.append(ScreenVariable(
+                    name=v.name, label=v.label, state="not_available", priority=v.priority, tier=v.tier,
+                    output="image", headline=Headline(text="No images in the record"), resolved_ms=_elapsed_ms(t0),
+                ))
+                continue
+        else:
+            documented = _documented_variable(v, store, screen.reference_date or "", t0)
+        if documented and shown_fact_ids and set(documented.fact_ids) <= shown_fact_ids:
+            continue   # everything on this card is already on the clinician's screen
         screen.variables.append(documented or ScreenVariable(
             name=v.name, label=v.label, state="pending", priority=v.priority, tier=v.tier, output=v.output,
         ))

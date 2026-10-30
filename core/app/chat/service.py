@@ -102,18 +102,24 @@ def _check(out: ChatAnswer, store: FactStore) -> tuple[list[str], list[str], lis
     return fact_ids, [p.passage_id for p in passages], errors
 
 
-def _open_chat(chat_id: Optional[str], screen_id: Optional[str]) -> Chat:
-    chat = _chats.get(chat_id or "") or Chat(chat_id=uuid.uuid4().hex[:12], screen_id=screen_id)
+def _open_chat(chat_id: Optional[str], screen_id: Optional[str], patient_id: str = "") -> Chat:
+    chat = _chats.get(chat_id or "") or Chat(chat_id=uuid.uuid4().hex[:12], screen_id=screen_id, patient_id=patient_id)
     if screen_id:
         chat.screen_id = screen_id
     _chats[chat.chat_id] = chat
     return chat
 
 
+CHAT_CARDS = 2   # extra cards per chat answer, next to the clinician's screen
+
+
 async def _start_cards(question: str, chat: Chat, store: FactStore):
-    """A small screen for this question, built in the background like any screen (select →
-    analytic pull → text search in the letters for what the store lacks)."""
-    return await fastpath.create_screen(_card_situation(question, chat), store)
+    """1-2 extra cards for this question, built in the background like any screen (select →
+    analytic pull → text search in the letters for what the store lacks), leaving out what
+    the clinician's screen already shows."""
+    screen = fastpath.get_screen(chat.screen_id) if chat.screen_id else None
+    shown = frozenset(fid for v in (screen.variables if screen else []) for fid in v.fact_ids)
+    return await fastpath.create_screen(_card_situation(question, chat), store, max_variables=CHAT_CARDS, shown_fact_ids=shown)
 
 
 async def _text_reply(question: str, chat: Chat, store: FactStore, t0: float) -> ChatReply:
@@ -154,7 +160,7 @@ async def _text_reply(question: str, chat: Chat, store: FactStore, t0: float) ->
 async def ask(question: str, store: FactStore, chat_id: Optional[str] = None,
               screen_id: Optional[str] = None, cards: bool = False, wait: bool = False) -> ChatReply:
     t0 = time.perf_counter()
-    chat = _open_chat(chat_id, screen_id)
+    chat = _open_chat(chat_id, screen_id, store.patient_id)
     card_screen = await _start_cards(question, chat, store) if cards else None
     reply = await _text_reply(question, chat, store, t0)
     if card_screen is not None:
@@ -176,7 +182,7 @@ async def stream(question: str, store: FactStore, chat_id: Optional[str] = None,
     Nothing waits for the slowest part.
     """
     t0 = time.perf_counter()
-    chat = _open_chat(chat_id, screen_id)
+    chat = _open_chat(chat_id, screen_id, store.patient_id)
     card_screen = await _start_cards(question, chat, store) if cards else None
     text = asyncio.create_task(_text_reply(question, chat, store, t0))
     sent_answer, last_version = False, -1
@@ -214,4 +220,6 @@ def _card_situation(question: str, chat: Chat) -> str:
     last = [m for m in chat.messages[-2:]]
     earlier = (f" Earlier: they asked \"{last[0].content}\", answer: \"{last[1].content}\"."
                if len(last) == 2 and last[0].role == "user" else "")
-    return f"Question about the patient: {question}.{role}{earlier}"
+    on_screen = "; ".join(v.label for v in (screen.variables if screen else []))
+    already = f" Already on the clinician's screen: {on_screen}." if on_screen else ""
+    return f"Question about the patient: {question}.{role}{earlier}{already}"

@@ -20,7 +20,7 @@ OutputType = Literal[
     "trend",   # numeric series for a chart
     "table",   # one row per item (e.g. medication), columns chosen for the role
     "list",    # findings, diagnoses, recommendations with their status
-    "image",   # requested image; the documents contain none → "not_available"
+    "image",   # imaging studies with their images (items[].source.image); none in the record → "not_available"
 ]
 # Columns a table may have; the select call picks a few per role
 TABLE_COLUMNS = ["item", "strength", "schedule", "route", "class", "status", "since", "last_change", "value", "date"]
@@ -89,7 +89,7 @@ VariableState = Literal[
     "derived",          # answered from the raw text by a derive call
     "not_documented",   # derive call confirmed it is not in the documents
     "check",            # an answer existed but failed validation
-    "not_available",    # an output the documents cannot hold (images)
+    "not_available",    # an image requested, but the record holds none
 ]
 
 
@@ -184,6 +184,7 @@ class ScreenVariable(BaseModel):
 
 class FastScreen(BaseModel):
     screen_id: str
+    patient_id: str = ""
     situation: str
     role: str = ""
     task: str = ""
@@ -201,3 +202,4 @@ class FastScreen(BaseModel):
 
 class ScreenRequest(BaseModel):
     situation: str
+    patient_id: Optional[str] = None   # default: the configured patient (PATIENT_ID)

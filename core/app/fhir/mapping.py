@@ -97,7 +97,7 @@ def binary(artifact: str, stage: str, content: Any) -> dict:
 # ---------------------------------------------------------------------------
 
 def _code(fact: dict, concept_label: Optional[str], extra: list[dict]) -> dict:
-    codings = list(extra)
+    codings = list({(c["system"], c["code"]): c for c in extra}.values())   # a source LOINC and the table's once
     if fact.get("concept_id"):
         codings.append({"system": CONCEPT_SYSTEM, "code": fact["concept_id"], **({"display": concept_label} if concept_label else {})})
     return _cc(fact.get("en") or fact.get("span") or fact["fact_id"], codings)
@@ -109,13 +109,13 @@ def _body_site(fact: dict) -> Optional[dict]:
 
 
 # Units as written in the letters → UCUM (the FHIR vital-signs profiles require system + code)
-_UCUM = {"kg": "kg", "g": "g", "cm": "cm", "m": "m", "mm": "mm", "%": "%", "mmhg": "mm[Hg]", "°c": "Cel", "c": "Cel",
+_UCUM = {"kg": "kg", "g": "g", "cm": "cm", "m": "m", "mm": "mm", "%": "%", "mmhg": "mm[Hg]", "°c": "Cel", "c": "Cel", "cel": "Cel",
          "/min": "/min", "1/min": "/min", "bpm": "/min", "/min.": "/min", "kg/m2": "kg/m2", "kg/m²": "kg/m2",
          "cm/s": "cm/s", "cm/sec": "cm/s", "mg/dl": "mg/dL", "mmol/l": "mmol/L", "ml": "mL"}
 _DEFAULT_UNIT = {"C:meas:bmi": "kg/m2"}
 # Measurements under the FHIR vital-signs profiles; the rest are exam or laboratory observations
 VITAL_SIGNS = {"C:meas:body_weight", "C:meas:body_height", "C:meas:bmi", "C:meas:blood_pressure",
-               "C:meas:heart_rate", "C:meas:temperature"}
+               "C:meas:heart_rate", "C:meas:temperature", "C:meas:respiratory_rate"}
 LABORATORY = {"C:meas:hba1c"}
 
 

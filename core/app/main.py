@@ -19,19 +19,20 @@ import asyncio
 import json
 import logging
 import time
+from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from app import originals, patient
+from app import images, originals, patient
 from app.config import settings
 from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
-from app.store import FactStore, load_store, get_store
+from app.store import FactStore, UnknownPatient, available_patients, get_store, load_store
 
 logger = logging.getLogger(__name__)
 
@@ -202,9 +203,17 @@ async def post_screen_stream(req: ScreenRequest) -> StreamingResponse:
     return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
+def _store_for(patient_id: Optional[str]) -> FactStore:
+    """The patient's store (default patient when None); 404 for a patient without a cache."""
+    try:
+        return get_store(patient_id)
+    except UnknownPatient:
+        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' has no cache – import it first")
+
+
 @app.get("/api/documents")
-async def get_documents() -> list[dict[str, Any]]:
-    store = get_store()
+async def get_documents(patient_id: Optional[str] = None) -> list[dict[str, Any]]:
+    store = _store_for(patient_id)
     return [
         {"doc_id": d.doc_id, "title": d.title, "date": d.date, "type": d.type}
         for d in store.documents.values()
@@ -212,8 +221,8 @@ async def get_documents() -> list[dict[str, Any]]:
 
 
 @app.get("/api/documents/{doc_id}")
-async def get_document(doc_id: str) -> dict[str, Any]:
-    store = get_store()
+async def get_document(doc_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
+    store = _store_for(patient_id)
     doc = store.get_document(doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail=f"Document '{doc_id}' not found")
@@ -225,8 +234,8 @@ async def get_document(doc_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/passages/{passage_id}")
-async def get_passage(passage_id: str) -> dict[str, Any]:
-    store = get_store()
+async def get_passage(passage_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
+    store = _store_for(patient_id)
     p = store.get_passage(passage_id)
     if p is None:
         raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
@@ -258,14 +267,14 @@ def _section_bounds(passages: list, idx: int) -> tuple[int, int]:
 
 
 @app.get("/api/passages/{passage_id}/context")
-async def get_passage_context(passage_id: str) -> dict[str, Any]:
+async def get_passage_context(passage_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
     """
     A passage inside its document section, for showing a source without the whole letter:
     {doc: {doc_id, title, date, type, department}, passage, section: {name, start, end, text}}.
     Offsets are into the full document text, so the caller can highlight passage
     start/end inside the section and later open the full document at the same place.
     """
-    store = get_store()
+    store = _store_for(patient_id)
     p = store.get_passage(passage_id)
     if p is None:
         raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
@@ -293,33 +302,34 @@ async def get_passage_context(passage_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @app.get("/api/documents/{doc_id}/original")
-async def get_original_document(doc_id: str) -> dict[str, Any]:
+async def get_original_document(doc_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
     """The original file: {doc_id, file, metadata, text} – text as delivered (HTML)."""
-    original = originals.load_original(doc_id)
+    original = originals.load_original(doc_id, _store_for(patient_id).patient_id)
     if original is None:
         raise HTTPException(status_code=404, detail=f"No original file for document '{doc_id}'")
     return original
 
 
 @app.get("/api/documents/{doc_id}/original/file")
-async def get_original_file(doc_id: str) -> FileResponse:
+async def get_original_file(doc_id: str, patient_id: Optional[str] = None) -> FileResponse:
     """The original JSON file itself, unchanged."""
-    path = originals.original_file(doc_id)
+    path = originals.original_file(doc_id, _store_for(patient_id).patient_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"No original file for document '{doc_id}'")
     return FileResponse(path, media_type="application/json", filename=path.name)
 
 
 @app.get("/api/passages/{passage_id}/original")
-async def get_passage_original(passage_id: str) -> dict[str, Any]:
+async def get_passage_original(passage_id: str, patient_id: Optional[str] = None) -> dict[str, Any]:
     """
     The original file of a passage and the passage's position in its raw text:
     text[raw_start:raw_end] is the passage as delivered (with <BR>, entities).
     """
-    p = get_store().get_passage(passage_id)
+    store = _store_for(patient_id)
+    p = store.get_passage(passage_id)
     if p is None:
         raise HTTPException(status_code=404, detail=f"Passage '{passage_id}' not found")
-    original = originals.load_original(p.doc_id)
+    original = originals.load_original(p.doc_id, store.patient_id)
     if original is None:
         raise HTTPException(status_code=404, detail=f"No original file for document '{p.doc_id}'")
     span = originals.raw_span(original["text"], p.start, p.end)
@@ -348,14 +358,72 @@ async def get_patient_profile(patient_id: str) -> dict[str, Any]:
     The header the frontend always shows: name, sex, birth date, age on the reference date,
     CAVE (allergies with sources), latest height / weight / BMI, latest stay, record overview.
     """
-    if patient_id != settings.PATIENT_ID:
-        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' is not loaded (loaded: {settings.PATIENT_ID})")
-    return patient.build_profile(get_store())
+    return patient.build_profile(_store_for(patient_id))
+
+
+@app.get("/api/v2/patients")
+async def list_patients() -> list[dict[str, Any]]:
+    """Every patient with a cache: id, name, sex, birth date, source (IBM letters or FHIR import), images."""
+    out = []
+    for pid in available_patients():
+        info = patient.patient_json(pid)
+        out.append({"patient_id": pid, "name": info.get("name"), "sex": info.get("sex"), "birth_date": info.get("dateOfBirth"),
+                    "source": info.get("source", "ibm"), "images": len(images.catalogue(settings.CACHE_DIR, pid)),
+                    "default": pid == settings.PATIENT_ID})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Images (DICOM) of a patient: quick previews, single slices, the original file
+# ---------------------------------------------------------------------------
+
+def _image(patient_id: str, image_id: str) -> dict:
+    info = _store_for(patient_id).images.get(image_id)
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"No image '{image_id}' for patient '{patient_id}'")
+    return info
+
+
+@app.get("/api/v2/patients/{patient_id}/images")
+async def list_images(patient_id: str) -> list[dict[str, Any]]:
+    """The patient's images with their links (same ImageRef as in sources)."""
+    store = _store_for(patient_id)
+    out = []
+    for image_id, info in store.images.items():
+        fact = next((f for f in store.facts.values() if f.fields.get("image_id") == image_id), None)
+        ref = images.image_ref(fact, store) if fact else None
+        out.append({**(ref.model_dump() if ref else {"image_id": image_id}), "fact_id": fact.fact_id if fact else None,
+                    "title": fact.en if fact else None, "rows": info.get("rows"), "columns": info.get("columns")})
+    return out
+
+
+@app.get("/api/v2/patients/{patient_id}/images/{image_id}/preview.png")
+async def image_preview(patient_id: str, image_id: str) -> FileResponse:
+    """Axial, coronal and sagittal middle slice side by side (rendered at import)."""
+    info = _image(patient_id, image_id)
+    return FileResponse(settings.CACHE_DIR / patient_id / "images" / info["preview"], media_type="image/png")
+
+
+@app.get("/api/v2/patients/{patient_id}/images/{image_id}/slice.png")
+async def image_slice(patient_id: str, image_id: str, axis: str = "axial", index: Optional[int] = None) -> Response:
+    """One slice as PNG (index 0 … frames-1; default the middle). Header X-Slice-Count: slices on that axis."""
+    if axis not in images.AXES:
+        raise HTTPException(status_code=400, detail=f"axis must be one of {images.AXES}")
+    info = _image(patient_id, image_id)
+    png, count = await asyncio.to_thread(images.render_slice, Path(info["dicom"]), axis, index)
+    return Response(png, media_type="image/png", headers={"X-Slice-Count": str(count), "Cache-Control": "max-age=3600"})
+
+
+@app.get("/api/v2/patients/{patient_id}/images/{image_id}/dicom")
+async def image_dicom(patient_id: str, image_id: str) -> FileResponse:
+    """The original DICOM file."""
+    info = _image(patient_id, image_id)
+    return FileResponse(info["dicom"], media_type="application/dicom", filename=Path(info["dicom"]).name)
 
 
 @app.get("/api/contradictions")
-async def get_contradictions() -> list[dict[str, Any]]:
-    store = get_store()
+async def get_contradictions(patient_id: Optional[str] = None) -> list[dict[str, Any]]:
+    store = _store_for(patient_id)
     return [cx.model_dump() for cx in store.contradictions]
 
 

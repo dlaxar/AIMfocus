@@ -170,6 +170,18 @@ class Need(BaseModel):
     priority: int = 5
 
 
+class ImageRef(BaseModel):
+    """An image behind a fact (e.g. an MRI study), with links the frontend can show at once."""
+    image_id: str
+    modality: Optional[str] = None      # MR, CT, DX …
+    body_site: Optional[str] = None
+    date: Optional[str] = None
+    frames: Optional[int] = None        # slices in the volume
+    preview_url: str                    # PNG: axial, coronal, sagittal middle slice side by side
+    slice_url: str                      # PNG of one slice: append ?axis=axial|coronal|sagittal&index=<n>
+    dicom_url: str                      # the original DICOM file
+
+
 class Source(BaseModel):
     doc_id: str
     doc_title: str
@@ -178,6 +190,7 @@ class Source(BaseModel):
     start: int
     end: int
     quote_de: str
+    image: Optional[ImageRef] = None    # set when the cited fact has an image
 
 
 class ScreenItem(BaseModel):

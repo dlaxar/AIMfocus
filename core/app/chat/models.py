@@ -29,6 +29,7 @@ AnswerState = Literal[
 
 class ChatRequest(BaseModel):
     question: str
+    patient_id: Optional[str] = None  # default: the screen's / chat's patient, else PATIENT_ID
     chat_id: Optional[str] = None     # continue a conversation (follow-up questions)
     screen_id: Optional[str] = None   # the clinician's screen, so follow-ups can refer to it
     cards: bool = False               # also answer with screen cards (value / trend / table / list)
@@ -61,5 +62,6 @@ class ChatReply(BaseModel):
 
 class Chat(BaseModel):
     chat_id: str
+    patient_id: str = ""
     screen_id: Optional[str] = None
     messages: list[ChatMessage] = Field(default_factory=list)

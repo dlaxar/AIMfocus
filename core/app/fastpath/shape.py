@@ -42,20 +42,28 @@ def _source(f: Fact | DerivedFact, store: FactStore) -> Optional[Source]:
     """The fact's own passage (a derived fact: its first input's, or the passage it was computed from)."""
     pid = getattr(f, "passage_id", None) or (f.fields.get("passage_id") if f.type == "derived" else None)
     pid = pid or _best_passage_id(f.fact_id, store)
-    return _build_source(pid, store) if pid else None
+    src = _build_source(pid, store) if pid else None
+    if src is not None:
+        from app.images import image_ref
+        src.image = image_ref(f, store)
+    return src
 
 
 def _cx_ids(fact_id: Optional[str], store: FactStore) -> list[str]:
     return [cx.contradiction_id for cx in store.contradictions if fact_id and fact_id in cx.fact_ids]
 
 
-_SYSTEM_NAMES = {"http://fhir.de/CodeSystem/bfarm/icd-10-gm": "ICD-10-GM", "http://hl7.org/fhir/sid/icd-10": "ICD-10", "http://www.whocc.no/atc": "ATC", "http://loinc.org": "LOINC"}
+_SYSTEM_NAMES = {"http://snomed.info/sct": "SNOMED CT", "http://www.nlm.nih.gov/research/umls/rxnorm": "RxNorm",
+                 "http://fhir.de/CodeSystem/bfarm/icd-10-gm": "ICD-10-GM", "http://hl7.org/fhir/sid/icd-10": "ICD-10", "http://www.whocc.no/atc": "ATC", "http://loinc.org": "LOINC"}
 
 
 def _codes(fact_id: Optional[str], store: FactStore) -> list[Coding]:
     """Standard codes of a fact (ICD-10, ATC, LOINC) – separate from the screen text."""
+    seen = {}
+    for c in getattr(store, "codes", {}).get(fact_id or "", []):
+        seen.setdefault((c["system"], c["code"]), c)
     return [Coding(system=_SYSTEM_NAMES.get(c["system"], c["system"]), code=c["code"], display=c.get("display"), uri=c["system"])
-            for c in getattr(store, "codes", {}).get(fact_id or "", [])]
+            for c in seen.values()]
 
 
 def _entry(f: Fact | DerivedFact, store: FactStore) -> Entry:
@@ -227,7 +235,7 @@ def shape_documented(var: ScreenVariable, sel: SelectedVariable, facts: list, st
         pass
     elif var.output == "table" and _shape_table(var, sel, facts, store, ref):
         pass
-    elif var.output == "list":
+    elif var.output in ("list", "image"):   # image: one item per study, its source carries the image links
         _shape_list(var, facts, store)
     else:
         var.output = "value"   # also when a trend has no numbers or a table no rows
