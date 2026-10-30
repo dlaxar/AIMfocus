@@ -26,7 +26,7 @@ Deviations from the design below:
 
 ## Results (patient 0000-0001)
 
-See the "Results" section at the end.
+See the section "Results" at the end.
 
 ## Goal
 
@@ -174,3 +174,28 @@ a good point to stop if time runs out.
 - **Rewriting the whole file after each stage:** about a few MB per patient, negligible.
 - **IBM codes only exist for patients IBM processed.** For a new patient without these files, facts
   simply stay uncoded.
+
+## Results
+
+Measured on branch `fhir-store`, patient 0000-0001, runtime model Claude Haiku 5.5, all 31
+eval situations (93 questions, `eval/score_runs.py`).
+
+| Check | Result |
+|---|---|
+| Round trip JSON → bundle → JSON | all 11 artifacts identical |
+| R4 validation (`fhir.resources` R4B models) | 386 resources valid, 0.2–0.4 s |
+| References inside the bundle | 445, none dangling |
+| Store from `fhir.json` vs. JSON files | identical in every field, fact sheet identical to the character; load 25 ms vs 7 ms |
+| Codes | 117 of 120 IBM mentions matched to our facts; ICD-10 / ATC on 150–158 facts; LOINC table (10 codes) checked on loinc.org |
+| `--from s3` with only `fhir.json` present | earlier stages restored, S3/S4 rerun, bundle rewritten |
+| Eval, JSON store | 86/93 (mean 4.3 s, max 7.9 s) |
+| Eval, same cache from `fhir.json` | 86/93 (mean 4.4 s, max 8.4 s) |
+| Fresh ingestion straight into `fhir.json`, eval on it | 87/93 (mean 4.6 s, max 7.6 s); ingestion 5 min 15 s |
+| After merging main (stricter prompt), `fhir.json` | 90/93 (mean 5.8 s); one screen at 10.9 s from a slow select call – the same situation repeated 4× gave 4.7–8.7 s on FHIR and 4.0–8.1 s on JSON |
+| Chat stream with cards, FHIR mode, through the backend | 6/6 questions; text 1.5–3.6 s, first cards 1.1–3.2 s |
+
+Not done: the official HL7 FHIR Validator (`validator_cli.jar`, Java) – downloading and running
+it needs a permission in this environment. To run it locally:
+`java -jar validator_cli.jar cache/0000-0001/fhir.json -version 4.0.1` (expect warnings for our
+unprofiled extensions).
+
