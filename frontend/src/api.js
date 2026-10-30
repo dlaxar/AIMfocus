@@ -65,6 +65,47 @@ export function watchScreen(sessionId, onScreen, onError) {
   return () => source.close()
 }
 
+// Question about the patient, answered as text plus cards (screen-api.md, section 7).
+// POST + server-sent events, so EventSource can't be used: the stream is read by hand.
+// handlers: onAnswer({chat_id, answer, state, sources, note, …}), onCards({cards, cards_status, …}),
+// onError(message), onDone(). Returns a function that aborts the request.
+export function askChat(sessionId, question, chatId, handlers) {
+  const controller = new AbortController()
+  const handle = { answer: handlers.onAnswer, cards: handlers.onCards, error: (d) => handlers.onError?.(d.detail) }
+
+  ;(async () => {
+    const res = await fetch(`${BASE_URL}/session/${encodeURIComponent(sessionId)}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, cards: true, ...(chatId ? { chat_id: chatId } : {}) }),
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`Chat request failed (${res.status})`)
+
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += value
+      let end
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, end)
+        buffer = buffer.slice(end + 2)
+        const name = /^event: ?(.*)$/m.exec(raw)?.[1]
+        const data = raw.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.replace(/^data: ?/, '')).join('\n')
+        if (name && data) handle[name]?.(JSON.parse(data))
+      }
+    }
+  })()
+    .catch((e) => {
+      if (e.name !== 'AbortError') handlers.onError?.(e.message || 'Chat request failed')
+    })
+    .finally(() => handlers.onDone?.())
+
+  return () => controller.abort()
+}
+
 // Passage → { doc: {doc_id, title, date, type, department}, passage, section: {name, start, end, text} }.
 // Cached per passage: the same source is opened many times on one screen.
 const passageContexts = new Map()
