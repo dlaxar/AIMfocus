@@ -29,8 +29,10 @@
     <PatientAutocomplete v-model="selectedPatient" @keyup.enter="next" />
   </label>
 
+  <p v-if="error" class="error" role="alert">{{ error }}</p>
+
   <Teleport to="body">
-    <NextButton :disabled="!selectedPatient" @click="next" />
+    <NextButton :disabled="!selectedPatient || loading" @click="next" />
   </Teleport>
 </template>
 
@@ -40,7 +42,7 @@ import { useRouter } from 'vue-router'
 import NextButton from '../components/NextButton.vue'
 import PatientAutocomplete from '../components/PatientAutocomplete.vue'
 import { form, session, setSessionSummary } from '../store.js'
-import { getSessionSummary } from '../api.js'
+import { getSessionSummary, setSessionPatient } from '../api.js'
 
 const router = useRouter()
 const selectedPatient = ref(null)
@@ -50,9 +52,20 @@ watch(selectedPatient, (p) => {
   form.patientData = p ?? null
 })
 
-function next() {
-  if (!selectedPatient.value) return
-  router.push({ path: '/patient/dashboard', state: { patient: selectedPatient.value } })
+const loading = ref(false)
+const error = ref('')
+async function next() {
+  if (!selectedPatient.value || loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    if (session.currentId) await setSessionPatient(session.currentId, selectedPatient.value.id)
+    router.push({ path: '/patient/dashboard', state: { patient: selectedPatient.value } })
+  } catch (e) {
+    error.value = e.message || 'Could not select the patient'
+  } finally {
+    loading.value = false
+  }
 }
 
 // Show the summary once available, otherwise fall back to the raw prompt
@@ -185,5 +198,9 @@ onMounted(async () => {
 }
 .label {
   font-size: 1.75rem;
+}
+.error {
+  margin: 12px 0 0;
+  color: #e5484d;
 }
 </style>

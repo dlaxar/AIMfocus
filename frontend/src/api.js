@@ -23,6 +23,17 @@ export async function createSession(situation) {
   return String(screen_id)
 }
 
+// The patient picked after the situation: the core rebuilds the screen for that patient (same ID).
+export async function setSessionPatient(sessionId, patientId) {
+  const res = await fetch(`${BASE_URL}/v2/screens/${encodeURIComponent(sessionId)}/patient`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patient_id: patientId }),
+  })
+  if (!res.ok) throw new Error(`Patient selection failed (${res.status})`)
+  return res.json()
+}
+
 // Current screen of a session: { status: 'partial'|'complete', role, task, variables[], contradictions[] }.
 export async function getScreen(sessionId) {
   const res = await fetch(`${BASE_URL}/v2/screens/${encodeURIComponent(sessionId)}`)
