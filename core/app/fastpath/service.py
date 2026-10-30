@@ -479,9 +479,6 @@ async def _derive_all(screen: FastScreen, store: FactStore, t0: float) -> None:
 
 def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
     """Relevant ones first; every other contradiction of the record stays available too."""
-    screen.contradictions = _relevant_contradictions(screen, store)
-    shown = {cx.contradiction_id for cx in screen.contradictions}
-    screen.other_contradictions = [cx for cx in store.contradictions if cx.contradiction_id not in shown]
     # Per value: which contradictions touch it (through its facts, or the passages a text
     # search cited) and which of its facts are part of one, so the UI can flag them
     for v in screen.variables:
@@ -493,21 +490,11 @@ def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
         if v.state == "derived" and v.latest:   # a text-search value: contradictions via its passages
             v.latest[0].contradiction_ids = list(v.contradiction_ids)
         v.contradictions = shape.contradiction_refs(v, store)
-
-
-def _relevant_contradictions(screen: FastScreen, store: FactStore):
-    concept_ids: set[str] = set()
-    passage_ids: set[str] = set()
-    for v in screen.variables:
-        for fid in v.fact_ids:
-            f = store.get_fact(fid)
-            if f and f.concept_id:
-                concept_ids.add(f.concept_id)
-        passage_ids.update(s.passage_id for s in v.sources)
-    return [
-        cx for cx in store.contradictions
-        if set(cx.concept_ids) & concept_ids or set(cx.passage_ids) & passage_ids
-    ]
+    # Relevant = flagged on a shown value. Sharing only a concept is not enough: the screen
+    # would announce a contradiction that no value on it carries
+    flagged = {cid for v in screen.variables for cid in v.contradiction_ids}
+    screen.contradictions = [cx for cx in store.contradictions if cx.contradiction_id in flagged]
+    screen.other_contradictions = [cx for cx in store.contradictions if cx.contradiction_id not in flagged]
 
 
 # ---------------------------------------------------------------------------
