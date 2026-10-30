@@ -153,6 +153,7 @@ class TestHealthz:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["cache_loaded"] is True
+        assert isinstance(data["commit"]["tags"], list)
 
 
 class TestScreenEndpoint:

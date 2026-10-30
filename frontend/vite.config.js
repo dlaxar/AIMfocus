@@ -34,6 +34,7 @@ export default defineConfig({
     // Forward API calls to the core (FastAPI on :8001) to avoid CORS in dev
     proxy: {
       '/api': 'http://localhost:8001',
+      '/healthz': 'http://localhost:8001',
     },
   },
 })

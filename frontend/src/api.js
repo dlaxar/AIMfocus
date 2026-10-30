@@ -9,6 +9,13 @@ export async function searchPatients(q, limit = 10) {
   return res.json()
 }
 
+// Core health: { status, commit: { hash, tags[] }, … }. /healthz sits next to the API root, not under it.
+export async function getHealth() {
+  const res = await fetch(`${BASE_URL.replace(/\/api$/, '')}/healthz`)
+  if (!res.ok) throw new Error(`Health request failed (${res.status})`)
+  return res.json()
+}
+
 // Database counts: { patients, bundles, valid_bundles, documents, valid_documents, per_patient[] }.
 export async function getStats() {
   const res = await fetch(`${BASE_URL}/v2/stats`)

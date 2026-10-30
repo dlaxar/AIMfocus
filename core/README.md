@@ -164,7 +164,7 @@ chat); without it the default patient (`PATIENT_ID`) is used. Stores load on fir
 | `GET` | `/api/documents/{doc_id}/original` · `/original/file` | The original file's text and metadata; the file itself |
 | `GET` | `/api/passages/{id}` · `/context` · `/original` | One passage; inside its document section; its span in the original file |
 | `GET` | `/api/contradictions` | All precomputed contradictions |
-| `GET` | `/healthz` | Cache loaded, manifest version |
+| `GET` | `/healthz` | Cache loaded, manifest version, checked-out commit and its tags |
 | `POST` | `/api/screen` · `/api/screen/stream` | Earlier runtime (R1 planner → R2 answerer → R3 validator → R4 assembly), kept for comparison; not used by the frontend |
 
 Screens and chats live in memory (single process).

@@ -17,7 +17,7 @@ Routes defined here:
   GET  /api/v2/patients/{patient_id}/images[/…] → DICOM images: list, preview, slices, file
   GET  /api/contradictions          → all precomputed contradictions
   GET  /api/v2/stats                → patient count and (validated) FHIR bundles / documents
-  GET  /healthz                     → health check
+  GET  /healthz                     → health check, incl. the checked-out commit and its tags
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from app import images, originals, patient, stats
+from app import images, originals, patient, stats, version
 from app.config import settings
 from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
@@ -463,4 +463,5 @@ async def healthz() -> dict[str, Any]:
         "patient_id": settings.PATIENT_ID,
         "fact_count": len(store.facts),
         "contradiction_count": len(store.contradictions),
+        "commit": await asyncio.to_thread(version.collect),
     }
