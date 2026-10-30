@@ -75,6 +75,7 @@ LLM_FAKE=true pytest tests/ -v
 uvicorn app.main:app --port 8001 &
 python -m eval.run_eval          # 5 standard situations
 python -m eval.run_eval --extra  # + 5 extra situations
+python -m eval.run_additional    # team questions (24 situations, 72 questions; Opus judge)
 ```
 
 ---
@@ -111,6 +112,7 @@ core/
     test_smoke.py         End-to-end smoke test (LLM_FAKE=true)
   eval/
     run_eval.py           Evaluation harness → markdown table
+    run_additional.py     Team questions (AIMfocus_test_questions_additional.csv): screens, upgrade, chat
     situations_extra.md   5 additional role situations
 cache/                    gitignored – preprocessing output
 data/                     gitignored – IBM patient data
