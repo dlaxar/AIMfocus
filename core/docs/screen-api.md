@@ -15,6 +15,7 @@ OpenAPI document: `http://127.0.0.1:8001/openapi.json` (browsable at `/docs`).
 | Short card title | `GET /api/session/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
 | Open a source letter | `GET /api/documents/<doc_id>` | the letter's text and passages (section 6) |
 | Ask about the patient | `POST /api/session/<id>/chat` | an answer with sources (section 7) |
+| Patient header (always shown) | `GET /api/patients/<patient_id>/profile` | name, birth date, age, CAVE, height / weight / BMI, latest stay (section 9) |
 
 `screen.status`: `starting` (select call running, `variables` empty) → `partial`
 (documented items there, text search running) → `complete`. Every update raises
@@ -315,3 +316,40 @@ empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation
 - Show a badge when `contradictions` is non-empty; mark entries / points / rows by their `contradiction_ids`.
 - Every entry, point and row has a `source`: link it to the letter view (section 6).
 - `not_documented` is information, not an error.
+
+## 9. Patient header
+
+What the frontend shows on every screen. Built in code from the patient file and the
+letters, no LLM, answers at once. Core route: `GET /api/v2/patients/<patient_id>`
+(404 for a patient that is not loaded).
+
+```
+GET /api/patients/0000-0001/profile
+```
+
+```jsonc
+{
+  "patient_id": "0000-0001",
+  "name": "Anna Musterfrau",
+  "sex": "female",
+  "birth_date": "1959-03-15",
+  "age": 57,                              // on reference_date, the record's "now" – not today
+  "reference_date": "2016-04-15",         // date of the latest letter
+  "allergies": [                          // CAVE: newest mention per allergen, with its letter
+    {"text": "Contrast media allergy (nausea, dizziness, vomiting)", "date": "2016-04-15",
+     "fact_id": "F:12340018:all:01", "source": Source}
+  ],
+  "height": {"value": 170, "unit": "cm", "date": "2016-04-15", "fact_id": "F:…", "source": Source},
+  "weight": {"value": 66, "unit": "kg", "date": "2016-04-15", "fact_id": "F:…", "source": Source},
+  "bmi": {"value": 22.8, "date": "2016-04-15", "fact_id": "D:bmi:12340018",
+          "text": "Computed BMI 22.8 kg/m² (66 kg / 170 cm)"},   // recomputed from weight and height
+  "latest_stay": {"id": "0000-0005", "type": "inpatient", "admission": "2016-04-10", "discharge": "2016-04-15"},
+  "record": {"documents": 8, "first_letter": "2015-06-11", "last_letter": "2016-04-15", "contradictions": 9}
+}
+```
+
+Any field can be `null` (or `[]` for `allergies`) when it is not documented. An empty
+`allergies` list means no allergy is documented – show "no known allergies documented",
+not "no allergies". The patient search (`/api/patients/search`, `/api/patients/<id>`) is
+separate and unchanged.
+

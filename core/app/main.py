@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from app import originals
+from app import originals, patient
 from app.config import settings
 from app.runtime import answerer, planner, screen, validator
 from app.schemas import Screen
@@ -275,6 +275,17 @@ async def get_passage_original(passage_id: str) -> dict[str, Any]:
         "raw_quote": original["text"][span[0]:span[1]],
         "quote": p.text,
     }
+
+
+@app.get("/api/v2/patients/{patient_id}")
+async def get_patient_profile(patient_id: str) -> dict[str, Any]:
+    """
+    The header the frontend always shows: name, sex, birth date, age on the reference date,
+    CAVE (allergies with sources), latest height / weight / BMI, latest stay, record overview.
+    """
+    if patient_id != settings.PATIENT_ID:
+        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' is not loaded (loaded: {settings.PATIENT_ID})")
+    return patient.build_profile(get_store())
 
 
 @app.get("/api/contradictions")

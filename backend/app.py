@@ -163,6 +163,12 @@ def search_patients():
     return jsonify(results)
 
 
+@app.get("/api/patients/<patient_id>/profile")
+def get_patient_profile(patient_id):
+    """Patient header from the core: name, birth date, age, CAVE, height/weight/BMI, latest stay."""
+    return jsonify(_core("GET", f"/api/v2/patients/{patient_id}"))
+
+
 @app.get("/api/patients/<patient_id>")
 def get_patient(patient_id):
     """Return a single patient by ID."""

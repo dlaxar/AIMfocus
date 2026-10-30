@@ -27,7 +27,8 @@ def nd(lines, *words):
 
 
 def kid(t, L):
-    return nd(L, "kidney", "renal")
+    """Kidney function not documented: the state, or an equivalent statement from the text search."""
+    return nd(L, "kidney", "renal") or any(has(l.lower(), "kidney", "renal", "creatinine", "egfr") and has(l.lower(), *NOREC, "no kidney", "no renal", "cannot be determined", " not ") for l in L)
 
 
 def side_left(L):
