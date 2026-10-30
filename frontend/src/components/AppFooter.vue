@@ -1,6 +1,6 @@
 <template>
   <footer class="app-footer">
-    <span>Team Oachkatzlschwoaf</span>
+    <span>Built on FHIR with Oachkatzlschwoaf</span>
     <span aria-hidden="true">·</span>
     <span v-if="!commit.shortHash">unknown commit</span>
     <a
