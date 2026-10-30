@@ -84,7 +84,7 @@ class TestUpgrade:
         assert final["screen_id"] == screen["screen_id"] and final["model"] == "slow-model"
         assert final["upgrade"] == "done" and final["status"] == "complete" and final["variables"]
         assert final["version"] > fast["version"] and "fast_first_response" in final["timings_ms"]
-        assert {m for p, m in llm.models if p == "fp_select"} == {"fast-model", "slow-model"}
+        assert {m for p, m in llm.models if p == "fp_plan"} == {"fast-model", "slow-model"}
 
     def test_upgrade_already_done_is_shown_at_once(self, client, models):
         models({"fast-model": 0.3})   # the upgrade finishes first (e.g. the patient was picked late)

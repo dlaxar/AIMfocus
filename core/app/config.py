@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # UPGRADE_EFFORT (output_config.effort, "low" is the lowest), and no thinking parameter is sent.
     UPGRADE_MODEL: str = "claude-opus-5-5"
     UPGRADE_EFFORT: str = "low"
+    # Plan the screen when the situation is submitted, before the patient is known (both models,
+    # in parallel); picking the patient then only applies the plan in code. False = the select
+    # call with the patient's fact store, after the patient is known.
+    SCREEN_PLAN: bool = True
     PREPROCESS_MODEL: str = "gemini-4-argon"
     # Preprocessing: max parallel LLM calls for independent work (S2 follow-ups)
     PREPROCESS_MAX_PARALLEL: int = 6

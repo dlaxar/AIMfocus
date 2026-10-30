@@ -29,6 +29,7 @@ from typing import Optional
 
 from app.config import settings
 from app.fastpath import shape
+from app.fastpath import plan
 from app.fastpath.models import (
     DeriveOutput,
     FastScreen,
@@ -50,6 +51,7 @@ _PROMPT_DIR = Path(__file__).parent.parent / "llm" / "prompts"
 _screens: dict[str, FastScreen] = {}      # screen_id → the screen shown (fast, later the upgrade)
 _tasks: dict[str, asyncio.Task] = {}
 _upgrade_tasks: dict[str, asyncio.Task] = {}
+_plans: dict[str, dict[str, asyncio.Task]] = {}   # screen_id → {"fast"/"slow": plan task}, patient-independent
 
 
 def _prompt(name: str) -> str:
@@ -522,8 +524,18 @@ async def create_screen(situation: str, store: FactStore, max_variables: Optiona
         reference_date=reference_date or None,
     )
     _screens[screen.screen_id] = screen
+    with_upgrade = upgrade and bool(settings.UPGRADE_MODEL) and settings.UPGRADE_MODEL != settings.RUNTIME_MODEL
+    # Everything starts now, while the clinician still picks the patient: the select calls
+    # with this patient's fact store (the screen as it stands), and – for whole screens – the
+    # same screen planned without any patient, so picking another patient needs no LLM call
+    # (set_patient applies the plans in code). Chat cards keep only the select call.
+    if settings.SCREEN_PLAN and max_variables is None:
+        plans = {"fast": asyncio.create_task(plan.make_plan(situation, settings.RUNTIME_MODEL))}
+        if with_upgrade:
+            plans["slow"] = asyncio.create_task(plan.make_plan(situation, settings.UPGRADE_MODEL))
+        _plans[screen.screen_id] = plans
     _tasks[screen.screen_id] = asyncio.create_task(_build(screen, store, t0, max_variables, shown_fact_ids))
-    if upgrade and settings.UPGRADE_MODEL and settings.UPGRADE_MODEL != settings.RUNTIME_MODEL:
+    if with_upgrade:
         screen.upgrade = "running"
         _upgrade_tasks[screen.screen_id] = asyncio.create_task(_upgrade(screen, store, t0))
     return screen
@@ -534,6 +546,9 @@ async def set_patient(screen_id: str, store: FactStore) -> Optional[FastScreen]:
     The situation was entered before the patient was picked: build the same screen again for
     this patient, under the same screen_id (stream, chat and upgrade follow it). The running
     builds for the earlier patient are cancelled. Same patient → the screen as it is.
+    No new LLM call for the selection: the plans made from the situation alone are applied to
+    this patient in code, so the documented cards are there at once (a plan still running is
+    awaited). Only the text search for cards this patient's facts cannot fill runs again.
     """
     old = _screens.get(screen_id)
     if old is None:
@@ -551,15 +566,16 @@ async def set_patient(screen_id: str, store: FactStore) -> Optional[FastScreen]:
         version=old.version + 1,   # newer than anything sent for the earlier patient
     )
     _screens[screen_id] = screen
-    _tasks[screen_id] = asyncio.create_task(_build(screen, store, t0))
+    plans = _plans.get(screen_id, {})
+    _tasks[screen_id] = asyncio.create_task(_build(screen, store, t0, plan_task=plans.get("fast")))
     if old.upgrade is not None and settings.UPGRADE_MODEL and settings.UPGRADE_MODEL != settings.RUNTIME_MODEL:
         screen.upgrade = "running"
-        _upgrade_tasks[screen_id] = asyncio.create_task(_upgrade(screen, store, t0))
+        _upgrade_tasks[screen_id] = asyncio.create_task(_upgrade(screen, store, t0, plans.get("slow")))
     logger.info("fastpath: screen %s now for patient %s", screen_id, store.patient_id)
     return screen
 
 
-async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
+async def _upgrade(fast: FastScreen, store: FactStore, t0: float, plan_task: Optional[asyncio.Task] = None) -> None:
     """
     The same screen built with UPGRADE_MODEL, in its own object. When it is complete it is
     shown instead of the fast one: same screen_id, a higher version, the whole screen (the
@@ -568,7 +584,7 @@ async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
     slow = FastScreen(screen_id=fast.screen_id, patient_id=fast.patient_id, model=settings.UPGRADE_MODEL,
                       situation=fast.situation, reference_date=fast.reference_date)
     try:
-        await _build(slow, store, t0)
+        await _build(slow, store, t0, plan_task=plan_task)
     except Exception:   # _build reports its own failures on the screen; this is the safety net
         logger.exception("fastpath: upgrade failed for screen %s", fast.screen_id)
         slow.error = slow.error or "upgrade failed"
@@ -587,10 +603,18 @@ async def _upgrade(fast: FastScreen, store: FactStore, t0: float) -> None:
 
 
 async def _build(screen: FastScreen, store: FactStore, t0: float, max_variables: Optional[int] = None,
-                 shown_fact_ids: frozenset = frozenset()) -> None:
-    """max_variables / shown_fact_ids: chat cards – at most that many, nothing the screen already shows."""
+                 shown_fact_ids: frozenset = frozenset(), plan_task: Optional[asyncio.Task] = None) -> None:
+    """
+    max_variables / shown_fact_ids: chat cards – at most that many, nothing the screen already shows.
+    plan_task: the screen planned from the situation alone (plan.make_plan) – applied to this
+    patient in code; without it, the select call with the patient's fact store.
+    """
     try:
-        selected = await _select(screen.situation, store, screen.reference_date or "", screen.model)
+        if plan_task is not None:
+            # shield: the plan is shared – a rebuild for another patient must not cancel it
+            selected = plan.materialize(await asyncio.shield(plan_task), store, screen.reference_date or "")
+        else:
+            selected = await _select(screen.situation, store, screen.reference_date or "", screen.model)
     except Exception as exc:  # the ID is already out: report the failure on the screen
         logger.exception("fastpath: select failed for screen %s", screen.screen_id)
         screen.error = f"Could not prepare the screen: {type(exc).__name__}"

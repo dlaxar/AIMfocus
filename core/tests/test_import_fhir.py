@@ -261,3 +261,51 @@ class TestPatientPickedLater:
             assert final["patient_id"] == PID and final["model"] == "slow-model" and final["upgrade"] == "done"
         finally:
             client_mod.use_client(previous)
+
+    def test_picking_the_patient_needs_no_llm_call(self, client, monkeypatch):
+        import app.llm.client as client_mod
+        from app.config import settings
+        from tests.test_upgrade import _ModelClient
+        monkeypatch.setattr(settings, "RUNTIME_MODEL", "fast-model")
+        monkeypatch.setattr(settings, "UPGRADE_MODEL", "slow-model")
+        previous = client_mod._client_instance
+        llm = _ModelClient({})
+        client_mod.use_client(llm)
+        try:
+            sid = client.post("/api/v2/screens", json={"situation": "Neurologist, headache"}).json()["screen_id"]
+            client.get(f"/api/v2/screens/{sid}?wait=true&final=true")   # select (default patient) and plans, both models
+            before = [p for p, _ in llm.models if p in ("fp_plan", "fp_select")]
+            assert sorted(before) == ["fp_plan", "fp_plan", "fp_select", "fp_select"]
+            client.put(f"/api/v2/screens/{sid}/patient", json={"patient_id": PID})
+            done = client.get(f"/api/v2/screens/{sid}?wait=true&final=true").json()
+            assert done["patient_id"] == PID and done["upgrade"] == "done"
+            assert [p for p, _ in llm.models if p in ("fp_plan", "fp_select")] == before   # no new plan or select
+        finally:
+            client_mod.use_client(previous)
+
+
+class TestPlanMatch:
+    """A plan made without the patient, applied to the patient's facts in code."""
+
+    def _match(self, **kw):
+        from app.fastpath.plan import PlannedVariable, match
+        from app.store import get_store
+        return match(PlannedVariable(label="x", **kw), get_store(PID), "2020-01-02")
+
+    def test_terms_find_concepts(self, client):
+        concepts, _ = self._match(types=["diagnosis"], terms=["hypertension", "high blood pressure"])
+        assert any("hypertension" in c for c in concepts)
+
+    def test_measurement_keys(self, client):
+        concepts, _ = self._match(types=["measurement"], measures=["body_weight"])
+        assert concepts == ["C:meas:body_weight"]
+
+    def test_types_keep_unrelated_facts_out(self, client):
+        concepts, facts = self._match(types=["medication"], terms=["hypertension"])
+        assert not concepts and not facts
+
+    def test_derived_age_and_word_prefix(self, client):
+        _, facts = self._match(types=["demographic"], derived=["age"])
+        assert facts == ["D:age"]
+        concepts, _ = self._match(types=["diagnosis"], terms=["hypertens"])   # start of a longer word
+        assert any("hypertension" in c for c in concepts)

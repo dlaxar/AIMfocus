@@ -1,0 +1,9 @@
+{
+  "role": "anaesthetist",
+  "task": "pre-operative check",
+  "variables": [
+    "Contrast allergy | critical | value | all | allergy | contrast,contrast media,kontrastmittel | | |",
+    "Antithrombotic medication | critical | value | latest | medication | acetylsalicyl,aspirin,clopidogrel,apixaban,rivaroxaban,heparin | | current_medication |",
+    "Kidney function | important | value | latest | measurement | creatinine,egfr,kreatinin | creatinine,egfr | |"
+  ]
+}
