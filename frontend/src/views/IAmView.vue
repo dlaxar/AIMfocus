@@ -21,7 +21,12 @@
     </button>
   </div>
 
-  <p class="tip" style="padding-bottom: 20px" @click="form.iAm = 'I am an anaesthetist and need a pre-op assessment for a patient having breast surgery'"><strong>Try:</strong> "I am an anaesthetist and need a pre-op assessment for a patient having breast surgery"</p>
+  <p class="tip" style="padding-bottom: 20px" @click="form.iAm = tips[tipIndex]" @mouseenter="tipPaused = true" @mouseleave="tipPaused = false">
+    <strong>Try: </strong>
+    <Transition name="fade" mode="out-in">
+      <span :key="tipIndex">"{{ tips[tipIndex] }}"</span>
+    </Transition>
+  </p>
 
   <section v-if="session.recent.length" class="recent">
     <h2>Recent</h2>
@@ -74,6 +79,46 @@ function resume(id) {
   router.push('/patient')
 }
 
+// Example prompts, shuffled per visit so each one starts somewhere new. Rotates unless hovered.
+const tips = shuffle([
+  'I am the anaesthetist and need a pre-op check on patients having quadrantectomy',
+  'I am the surgeon planning an operation after a tumour board',
+  'I am the GP and want to review diabetes therapy',
+  'I am the emergency physician on night duty',
+  'I am the GP and want to check which follow-ups are still open',
+  'I am the cardiologist and want to see how heart function has changed over time',
+  'I am the oncologist and need the tumour stage and receptor status before planning therapy',
+  'I am the radiologist and need to know about contrast allergies and kidney function before a CT',
+  'I am the ward pharmacist and want to check the current medication for interactions',
+  'I am the neurologist and want to review previous strokes or TIAs and their work-up',
+  'I am the nurse on admission and need allergies, mobility and current medication',
+  'I am the resident doing the morning round and want a summary of the last 24 hours',
+  'I am the discharging physician and need the open issues for the discharge letter',
+  'I am the nephrologist and want to see the course of creatinine and eGFR',
+  'I am the endocrinologist and want the HbA1c trend and glucose-lowering drugs',
+  'I am the vascular surgeon and want all carotid ultrasound findings',
+  'I am the physiotherapist and need restrictions and precautions before mobilisation',
+  'I am the psychiatrist on consult and want current psychotropic medication and past episodes',
+  'I am the radiation oncologist and need prior radiotherapy and the current treatment plan',
+  'I am the on-call doctor and need to know whether anticoagulants have to be paused before a procedure',
+  'I am the dietitian and want the weight course and nutrition-related diagnoses',
+  'I am the palliative care physician and want the advance directive and goals of care',
+  'I am the infectious disease consultant and want recent cultures and antibiotic history',
+  'I am the GP taking over this patient and want a short overview of the medical history',
+])
+function shuffle(list) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[list[i], list[j]] = [list[j], list[i]]
+  }
+  return list
+}
+const tipIndex = ref(0)
+const tipPaused = ref(false)
+const tipTimer = setInterval(() => {
+  if (!tipPaused.value) tipIndex.value = (tipIndex.value + 1) % tips.length
+}, 6000)
+
 const formatDate = (ts) =>
   new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -101,7 +146,10 @@ function toggleMic() {
   listening.value = true
 }
 
-onBeforeUnmount(() => recognition?.stop())
+onBeforeUnmount(() => {
+  recognition?.stop()
+  clearInterval(tipTimer)
+})
 </script>
 
 <style scoped>
@@ -197,6 +245,14 @@ textarea {
 }
 .tip:hover {
   color: var(--text);
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 .error {
   margin: 0;
