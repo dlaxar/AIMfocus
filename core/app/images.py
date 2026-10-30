@@ -75,10 +75,36 @@ def safe_id(image_id: str) -> str:
     return "".join(c if c.isalnum() or c in ".-" else "-" for c in image_id)
 
 
+def dicom_path(stored: str) -> Path:
+    """
+    Where the DICOM file is on this machine. images.json stores it relative to DATA_DIR
+    ("coherent/<patient>/dicom/…dcm"); an absolute path from another machine (older
+    imports) is re-anchored at its "data/" part, so a copied cache keeps working.
+    """
+    from app.config import settings
+    p = Path(stored)
+    if not p.is_absolute():
+        return settings.DATA_DIR / p
+    if not p.exists() and "data" in p.parts:
+        rebased = settings.DATA_DIR.joinpath(*p.parts[len(p.parts) - p.parts[::-1].index("data"):])
+        if rebased.exists():
+            return rebased
+    return p
+
+
+def relative_to_data(path: Path) -> str:
+    """The path stored in images.json / patient.json: relative to DATA_DIR when it is inside it."""
+    from app.config import settings
+    path, data = Path(path).resolve(), settings.DATA_DIR.resolve()
+    return path.relative_to(data).as_posix() if path.is_relative_to(data) else str(path)
+
+
 def catalogue(cache_dir: Path, patient_id: str) -> dict[str, dict]:
-    """image_id → {dicom, preview, modality, body_site, date, frames, …} from cache/<patient>/images.json."""
+    """image_id → {dicom (absolute, on this machine), preview, modality, body_site, date, frames, …}
+    from cache/<patient>/images.json."""
     path = cache_dir / patient_id / "images.json"
-    return {i["image_id"]: i for i in json.loads(path.read_text(encoding="utf-8"))} if path.exists() else {}
+    entries = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    return {i["image_id"]: {**i, "dicom": str(dicom_path(i["dicom"]))} for i in entries}
 
 
 def image_ref(fact, store):

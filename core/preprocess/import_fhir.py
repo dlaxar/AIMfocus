@@ -277,7 +277,8 @@ def run(folder: Path, pid: Optional[str] = None, max_notes: int = MAX_NOTES) -> 
     patient = next(e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Patient")
     pid = pid or f"coh-{patient['id'][:8]}"
     b, info, images = import_bundle(bundle, pid, folder / "dicom")
-    info["source_folder"] = str(folder.resolve())
+    from app import images as image_store
+    info["source_folder"] = image_store.relative_to_data(folder)   # relative to DATA_DIR: works on every machine
 
     data_dir = settings.DATA_DIR / f"patient-{pid}"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -295,8 +296,8 @@ def run(folder: Path, pid: Optional[str] = None, max_notes: int = MAX_NOTES) -> 
          "facts_extracted": sum(1 for f in b.facts if f["passage_id"].startswith(d + ":")), "facts_rejected": 0,
          "uncovered_passages": []} for d, r in reports.items()], indent=2), encoding="utf-8")
 
-    from app import images as image_store
     previews = [image_store.render_preview(Path(i["dicom"]), out / "images", i["image_id"]) for i in images]
+    images = [{**i, "dicom": image_store.relative_to_data(Path(i["dicom"]))} for i in images]
     # FHIR says what the study is (MR, head); the DICOM header only adds the volume size
     (out / "images.json").write_text(json.dumps([{**p, **i, "dicom_modality": p.get("modality")} for i, p in zip(images, previews)], indent=2), encoding="utf-8")
     logger.info("%s (%s): %d documents, %d passages, %d facts, %d image(s)", pid, info["name"], len(b.documents),

@@ -384,6 +384,15 @@ def _image(patient_id: str, image_id: str) -> dict:
     return info
 
 
+def _dicom(patient_id: str, image_id: str) -> dict:
+    """The image, when its DICOM file is on this machine (DATA_DIR); the preview needs only the cache."""
+    info = _image(patient_id, image_id)
+    if not Path(info["dicom"]).exists():
+        raise HTTPException(status_code=404, detail=f"DICOM file of '{image_id}' is not in DATA_DIR on this machine "
+                                                    f"({info['dicom']}); the preview still works")
+    return info
+
+
 @app.get("/api/v2/patients/{patient_id}/images")
 async def list_images(patient_id: str) -> list[dict[str, Any]]:
     """The patient's images with their links (same ImageRef as in sources)."""
@@ -409,7 +418,7 @@ async def image_slice(patient_id: str, image_id: str, axis: str = "axial", index
     """One slice as PNG (index 0 … frames-1; default the middle). Header X-Slice-Count: slices on that axis."""
     if axis not in images.AXES:
         raise HTTPException(status_code=400, detail=f"axis must be one of {images.AXES}")
-    info = _image(patient_id, image_id)
+    info = _dicom(patient_id, image_id)
     png, count = await asyncio.to_thread(images.render_slice, Path(info["dicom"]), axis, index)
     return Response(png, media_type="image/png", headers={"X-Slice-Count": str(count), "Cache-Control": "max-age=3600"})
 
@@ -417,7 +426,7 @@ async def image_slice(patient_id: str, image_id: str, axis: str = "axial", index
 @app.get("/api/v2/patients/{patient_id}/images/{image_id}/dicom")
 async def image_dicom(patient_id: str, image_id: str) -> FileResponse:
     """The original DICOM file."""
-    info = _image(patient_id, image_id)
+    info = _dicom(patient_id, image_id)
     return FileResponse(info["dicom"], media_type="application/dicom", filename=Path(info["dicom"]).name)
 
 
