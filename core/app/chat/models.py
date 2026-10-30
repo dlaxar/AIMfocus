@@ -32,7 +32,8 @@ class ChatRequest(BaseModel):
     chat_id: Optional[str] = None     # continue a conversation (follow-up questions)
     screen_id: Optional[str] = None   # the clinician's screen, so follow-ups can refer to it
     cards: bool = False               # also answer with screen cards (value / trend / table / list)
-    wait: bool = True                 # cards: in this reply (default); false = stream them via cards_screen_id
+    wait: bool = False                # cards: false (default) = reply at once, stream the cards via cards_screen_id;
+                                      # true = wait for the finished cards (use POST /api/v2/chat/stream instead)
 
 
 class ChatMessage(BaseModel):

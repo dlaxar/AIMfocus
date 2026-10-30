@@ -15,6 +15,7 @@ OpenAPI document: `http://127.0.0.1:8001/openapi.json` (browsable at `/docs`).
 | Short card title | `GET /api/session/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
 | Open a source letter | `GET /api/documents/<doc_id>` | the letter's text and passages (section 6) |
 | Ask about the patient | `POST /api/session/<id>/chat` | an answer with sources (section 7) |
+| Ask, with cards, streamed | `POST /api/session/<id>/chat/stream` (SSE) | `answer` at once, then `cards` as they come, then `done` (section 7) |
 | Patient header (always shown) | `GET /api/patients/<patient_id>/profile` | name, birth date, age, CAVE, height / weight / BMI, latest stay (section 9) |
 
 `screen.status`: `starting` (select call running, `variables` empty) → `partial`
@@ -296,17 +297,44 @@ language of the question, names contradictions, and gives no treatment advice. E
 empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
 `GET /api/v2/chat/<chat_id>` on the core.
 
-### Chat with cards
+### Chat with cards (streamed)
 
-Add `"cards": true` and the reply carries, besides the text answer, the **cards** that answer
-the question – the same `ScreenVariable` objects as on a screen (section 3): the model picks
-1–4 variables with their output type, the values are pulled from the documents by code, and
-a check that is missing comes back as `state: "not_documented"` with `headline.text: "Not
-documented"`. Render them with the screen renderers.
+The chat answers in text **and** pulls the variables that answer the question as **cards** –
+the same `ScreenVariable` objects as on a screen (section 3): the model picks 1–4 variables
+with their output type, the values are pulled from the documents by code, anything the fact
+store lacks is searched in the letters (so questions about details that are not a stored fact
+work too), and a check that is missing comes back as `state: "not_documented"` with
+`headline.text: "Not documented"`. Render the cards with the screen renderers.
+
+**Recommended: one stream.** Nothing waits for the slowest part; later results may come after
+10 s, the first ones come at once.
+
+```
+POST /api/session/<session_id>/chat/stream          (core: POST /api/v2/chat/stream)
+{"question": "What did the rectal examination in June 2015 show?", "chat_id": "…optional…"}
+```
+
+Server-sent events, in the order they are ready:
+
+| Event | When | `data` |
+|---|---|---|
+| `answer` | text ready, ~1.5 s | the chat reply (`chat_id`, `answer`, `state`, `sources`, `fact_ids`, `cards_screen_id`) – same as section 7 |
+| `cards` | first after ~1.5–3 s, again on every change | `{chat_id, cards_screen_id, cards_status, cards: [ScreenVariable…], elapsed_ms}` – always the **full** current list; replace what you show. Cards from the fact store come first; `pending` cards fill in when the text search is done |
+| `done` | everything finished | `{elapsed_ms}` |
+| `error` | the text answer failed | `{detail}` (cards may still follow) |
+
+`answer` and the first `cards` can come in either order. `"cards": false` streams only `answer`
+and `done`. Pass `chat_id` from the `answer` event with the next question for follow-ups.
+
+Measured through the Flask backend (Haiku 5.5): text 1.5–2.6 s, first cards 1.3–3.0 s, done
+within 4.5 s; e.g. "What did the rectal examination show?" (not a stored fact) → a `list` card
+from the letter text; "Is a CPAP therapy documented?" → `not_documented` card.
+
+**Without streaming** – `POST /api/session/<session_id>/chat` with `"cards": true`:
 
 ```
 POST /api/session/<session_id>/chat
-{"question": "How has her weight changed?", "cards": true}
+{"question": "How has her weight changed?", "cards": true, "wait": true}
 ```
 
 ```jsonc
@@ -332,7 +360,7 @@ POST /api/session/<session_id>/chat
 | Request field | Default | Meaning |
 |---|---|---|
 | `cards` | `false` | also return cards; without it the chat answers in text only, as before |
-| `wait` | `true` | `true`: the finished cards are in this reply. `false`: the reply comes as soon as the text is ready, with `cards: []` and `cards_screen_id` – stream the cards with `GET /api/session/<cards_screen_id>/stream` (or `/api/v2/screens/<id>/stream` on the core) |
+| `wait` | `false` | `false`: the reply comes as soon as the text is ready, with `cards: []` and `cards_screen_id` – stream the cards with `GET /api/session/<cards_screen_id>/stream` (or `/api/v2/screens/<id>/stream` on the core). `true`: the finished cards are in this reply (slower) |
 
 Examples from the live test (Haiku 5.5, 12 questions × 2 runs, all as expected):
 
@@ -346,8 +374,8 @@ Examples from the live test (Haiku 5.5, 12 questions × 2 runs, all as expected)
 | Is her kidney function documented? | `value`, `state: "not_documented"` |
 | Since when? (follow-up to the blood thinner) | `list` with the aspirin start in 2015 |
 
-Timing: text answer about 1.6 s on average; the reply with cards about 2.5 s (single outliers up
-to about 12 s when a text search is slow – use `wait: false` if the text must come first).
+Timing with `wait: true`: text answer about 1.6 s on average; the reply with cards about 2.5 s
+(single outliers up to about 12 s when a text search is slow – the stream avoids that wait).
 
 ## 8. Rendering checklist
 

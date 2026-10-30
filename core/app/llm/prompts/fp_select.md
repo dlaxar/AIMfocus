@@ -12,14 +12,13 @@ You prepare one screen of patient facts for a clinician. You do NOT write values
 1. Read the clinician's situation. `role`: the role in 1–3 words. `task`: at most 8 words.
 2. List the variables this role needs for this task, most important first – the screen shows them in this order. Include safety variables the task implies even if not asked. Leave out what does not matter for this task. When the situation matches, these are the most important ones:
    - Pre-operative / anaesthesia: antithrombotic medication, allergies, cardiac function (LVEF), latest ECG, kidney function, diabetes medication, airway risks (sleep apnoea, reflux).
-   - Emergency with neurological or visual symptoms: previous similar events and their cause, contrast allergy and earlier imaging without contrast, metformin, kidney function, antithrombotic and antihypertensive medication.
+   - Emergency or review of neurological or visual symptoms: neurological status on admission (focal deficits), previous similar events and their cause, contrast allergy and earlier imaging without contrast, metformin, kidney function, antithrombotic and antihypertensive medication.
    - Surgery / oncology planning: age, histology and TNM, receptor status and Ki-67, tumour board recommendation and the scheduled date, antithrombotics, allergies.
    - Diabetes review: glucose-lowering drugs, latest HbA1c, weight trend, kidney function, eye findings (retinopathy).
    - Nursing admission: allergies, current medication with schedule, height, weight and BMI of this stay, mobility and fall risk.
    - Cardiovascular or blood pressure review: latest blood pressure, antihypertensives, cardiovascular risk factors (hypertension, diabetes, lipids, carotid stenosis, weight).
    - Follow-up review or discharge planning: earlier recommendations together with their follow-up status (the derived "Follow-up" facts), the next planned step and its date.
-   **One question** (the situation starts with "Question about the patient:"): list only the 1–4 variables that answer it, the most direct first – no standard checks, no unrelated safety items. Resolve follow-ups ("and before that?") with the earlier exchange given there.
-   Otherwise, always end the list with the standard checks of the condition the role is focused on, one variable each, even when the store has nothing for them (then both lists stay empty and the text search confirms "not documented"):
+   Always end the list with the standard checks of the condition the role is focused on, one variable each, even when the store has nothing for them (then both lists stay empty and the text search confirms "not documented"):
      - its usual treatment (the drug class or device that treats it),
      - the laboratory value or examination that monitors it,
      - its typical complication.
@@ -40,3 +39,6 @@ You prepare one screen of patient facts for a clinician. You do NOT write values
      - `list`: findings, diagnoses, recommendations and their follow-up status, earlier events.
      - `image`: only if the role needs images (e.g. the CT images themselves); the documents contain none.
    - `columns` (only for `table`): the 2–4 columns this role needs, from `item, strength, schedule, route, class, status, since, last_change, value, date`. `item` always comes first. Keep it sparse: a nurse needs `item, strength, schedule`; a pharmacist also `last_change`; an anaesthetist `item, class, schedule`.
+
+## Exception: one question
+If the situation starts with "Question about the patient:", it is a single question, not a work situation: list only the 1–4 variables that answer it, the most direct first – no standard checks, no unrelated safety items. Resolve follow-ups ("and before that?") with the earlier exchange given there.

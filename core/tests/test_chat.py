@@ -25,6 +25,16 @@ def client():
         yield c
 
 
+def _sse(body: str) -> list[tuple[str, dict]]:
+    """Server-sent events as (event, data) pairs."""
+    import json as _json
+    out = []
+    for block in body.strip().split("\n\n"):
+        lines = dict(line.split(": ", 1) for line in block.splitlines())
+        out.append((lines["event"], _json.loads(lines["data"])))
+    return out
+
+
 class TestChat:
     def test_answer_comes_with_its_sources(self, client):
         out = client.post("/api/v2/chat", json={"question": "Which allergies?"}).json()
@@ -58,7 +68,7 @@ class TestChat:
 
 class TestChatCards:
     def test_cards_come_in_the_reply_with_type_and_state(self, client):
-        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True}).json()
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True, "wait": True}).json()
         assert out["answer"] and out["cards_status"] == "complete"
         cards = {c["name"]: c for c in out["cards"]}
         assert cards["contrast_allergy"]["state"] == "documented" and cards["contrast_allergy"]["headline"]["text"]
@@ -69,10 +79,27 @@ class TestChatCards:
         assert "cards" in out["timings_ms"]
 
     def test_cards_can_be_streamed_instead(self, client):
-        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True, "wait": False}).json()
+        out = client.post("/api/v2/chat", json={"question": "Which allergies?", "cards": True}).json()   # wait=false is the default
         assert out["cards"] == [] and out["cards_screen_id"]
         screen = client.get(f"/api/v2/screens/{out['cards_screen_id']}?wait=true").json()
         assert screen["status"] == "complete" and screen["variables"]
+
+    def test_stream_sends_answer_then_cards_then_done(self, client):
+        import json as _json
+        body = client.post("/api/v2/chat/stream", json={"question": "Which allergies?"}).text
+        events = _sse(body)
+        names = [n for n, _ in events]
+        assert names[0] in ("answer", "cards") and names[-1] == "done" and "answer" in names
+        last_cards = [d for n, d in events if n == "cards"][-1]
+        assert last_cards["cards_status"] == "complete"
+        states = {c["name"]: c["state"] for c in last_cards["cards"]}
+        assert states["contrast_allergy"] == "documented" and states["kidney_function"] == "not_documented"
+        answer = next(d for n, d in events if n == "answer")
+        assert answer["answer"] and answer["cards_screen_id"] == last_cards["cards_screen_id"]
+
+    def test_stream_without_cards(self, client):
+        body = client.post("/api/v2/chat/stream", json={"question": "Which allergies?", "cards": False}).text
+        assert [n for n, _ in _sse(body)] == ["answer", "done"]
 
     def test_no_cards_unless_asked(self, client):
         out = client.post("/api/v2/chat", json={"question": "Which allergies?"}).json()
