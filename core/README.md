@@ -37,6 +37,7 @@ python -m preprocess.run --patient 0000-0001 --from s3      # restart from a sta
 python -m preprocess.run --patient 0000-0001 --offline-llm DIR   # answer LLM prompts from files
 python -m preprocess.refresh_derived --patient 0000-0001    # code-only derived facts, no LLM
 python -m preprocess.import_fhir --all ../data/coherent     # FHIR R4 patients (Synthea / Coherent), no LLM
+python -m preprocess.make_demo_patient                      # demo copy of 0000-0001 with a brain MRI (0000-0101), no LLM
 python -m preprocess.convert_cache --patient 0000-0001      # JSON files ↔ fhir.json (--to-json)
 python -m preprocess.validate_fhir --patient 0000-0001      # official HL7 validator (Java 17+)
 python -m contradictions --patient 0000-0001                # contradiction rules only (--llm: + sweep/judge)
@@ -88,6 +89,7 @@ core/
     s4_export.py          fact_sheet.txt + manifest.json
     vocab.py              Controlled vocabulary for concept keys and measurement keys
     import_fhir.py        FHIR R4 bundles + DICOM → cache, no LLM
+    make_demo_patient.py  Demo patient 0000-0101 (Eva Mustermann): copy of 0000-0001 + MRI report and image
     convert_cache.py      JSON files ↔ fhir.json
     validate_fhir.py      Official HL7 validator run
     refresh_derived.py    Recompute code-only derived facts
