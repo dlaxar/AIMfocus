@@ -9,7 +9,7 @@ Oachkatzlschwoaf
 
 ## Member names
 
-Daniel Laxar, Lorenz Kapral, Henry Forman, Mohammad Azarbeik
+Aylin Albrecht, Mohammad Mahdi Azarbeik, Henry Forman, Lorenz Kapral, Daniel Laxar
 
 ## Track
 
@@ -27,23 +27,20 @@ https://github.com/dlaxar/AIMfocus
 
 A patient's history is spread across many letters from different departments that
 contradict each other, and each clinician needs a different handful of facts from them right
-now. Reading everything takes too long, and AI summaries that might invent a dose can't be
-trusted.
+now. Reading everything takes too long, and traditional AI is prone to halucinations.
 
 ## What they built
 
 AIMfocus: the clinician types or says who they are and what they're about to do
 ("Emergency department, blurry vision"), picks the patient, and gets one screen
-with only the facts that role needs, in three tiers: **Important** (check before acting),
-**Additional** (for this task) and **Background** (context, collapsed). Every value links to
-the sentence it came from, shown highlighted in its letter. Facts the letters don't contain
-show as "not documented", and contradictions between letters are flagged on the values they
-affect. The record is read once, offline, by an LLM that must quote its source word for
-word. At request time the model only *chooses* from facts already checked, and code verifies
-every number, drug, side and date before it's shown. A chat bar answers follow-up questions
-with sources. Results on the 5 challenge situations: 15/15 correct answers, 100% traceable
-sources (278/278), 0 invented facts, 8 real contradictions found and no false alarms, first
-response 1.8 s at worst (median 117 ms).
+with only the facts that role needs, automatically prioritized in three tiers: 
+**Important** (check before acting), **Additional** (for this task) and **Background** (context, collapsed). 
+Every fact can be traced to the exact phrase it came from. Contradictions are flagged and reported as such. 
+At request time the model chooses from facts already checked, and code verifies
+every number, drug, side and date before it's shown. A chat allows follow-up questions. 
+
+Built on FHIR, blazingly fast (median responsse time 117ms), incredibly accurate (278/278 sitations),
+100% traceable.
 
 ## Tech used
 
