@@ -255,6 +255,22 @@ def _norm_schedule(s: str) -> str:
     return m.group(1) if m else s
 
 
+def _daily_dose(strength: str, schedule: str) -> tuple[float, str] | None:
+    """'16mg' × '1-0-1/2' → (24.0, 'mg'): the slots summed (½ = 0.5) times the strength.
+    None when either is not of that form (weekly schemes, drops without a strength, …)."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(mg|mcg|g|iu|ie)", _norm_strength(strength))
+    sched = _norm_schedule(schedule)
+    if not m or not re.fullmatch(r"\d+(?:/\d+)?(?:-\d+(?:/\d+)?){2,3}", sched):
+        return None
+    units = sum(float(a) / float(b) for a, b in (
+        (s.split("/") if "/" in s else (s, "1")) for s in sched.split("-")))
+    return float(m.group(1)) * units, m.group(2)
+
+
+def _dose_text(dose: tuple[float, str] | None) -> str:
+    return f", {_fmt(round(dose[0], 2))} {dose[1]}/day" if dose else ""
+
+
 def _differs(a: str, b: str, norm) -> bool:
     """A change only when both sides state the value and they differ after normalising."""
     return bool(a) and bool(b) and norm(a) != norm(b)
@@ -280,12 +296,19 @@ def _derive_med_changes(facts: list[Fact], concepts: dict[str, Concept]) -> list
             curr_str = curr.fields.get("strength", "")
             if _differs(prev_sched, curr_sched, _norm_schedule) or _differs(prev_str, curr_str, _norm_strength):
                 label = concept.label_en
+                # Daily doses computed here, so nobody has to read "1-0-1/2" (24 mg) by eye
+                before, after = _daily_dose(prev_str, prev_sched), _daily_dose(curr_str, curr_sched)
+                delta = ""
+                if before and after and before[1] == after[1] and before[0] != after[0]:
+                    diff = after[0] - before[0]
+                    delta = (f"; daily dose {'+' if diff > 0 else '−'}{_fmt(round(abs(diff), 2))} {after[1]}"
+                             f" ({'+' if diff > 0 else '−'}{_fmt(round(abs(diff) / before[0] * 100, 1))}%)")
                 derived.append(DerivedFact(
                     fact_id=f"D:medchange:{slug(label)}:{prev.date}_{curr.date}",
                     en=(
                         f"{label.title()} changed: "
-                        f"{prev_str} {prev_sched} ({prev.date}) → "
-                        f"{curr_str} {curr_sched} ({curr.date})"
+                        f"{prev_str} {prev_sched} ({prev.date}{_dose_text(before)}) → "
+                        f"{curr_str} {curr_sched} ({curr.date}{_dose_text(after)}){delta}"
                     ),
                     inputs=[prev.fact_id, curr.fact_id],
                     formula="schedule_or_strength_change",

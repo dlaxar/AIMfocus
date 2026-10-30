@@ -406,3 +406,14 @@ class TestEvalHelpers:
         assert not score_question(QuestionVerdict(question_id="1.1", answered=False), exp, items)[0]
         not_doc = {"id": "5.2", "sources": []}
         assert score_question(QuestionVerdict(question_id="5.2", answered=True, item_indices=[1]), not_doc, items)[0]
+
+
+def test_medication_change_states_daily_doses():
+    assert s2_merge._daily_dose("16mg", "1-0-1/2-0") == (24.0, "mg")
+    assert s2_merge._daily_dose("1000 mg", "1-1-1") == (3000.0, "mg")
+    assert s2_merge._daily_dose("70mg", "1x/Woche") is None
+    prev = _fact("F:a:med:01", "a:p001", "medication", "C:med:candesartan", fields={"strength": "16mg", "schedule": "1-0-1/2-0"})
+    curr = _fact("F:b:med:01", "b:p001", "medication", "C:med:candesartan", fields={"strength": "16mg", "schedule": "1-0-1-0"})
+    prev.date, curr.date = "2015-06-28", "2016-04-15"
+    [d] = s2_merge._derive_med_changes([prev, curr], _concepts([prev, curr]))
+    assert "24 mg/day" in d.en and "32 mg/day" in d.en and "daily dose +8 mg (+33.3%)" in d.en

@@ -153,3 +153,9 @@ class TestChatValidation:
         p = next(p for p in store.passages.values() if "Testopril" in p.text)
         out = ChatAnswer(answer="Testopril", found=True, passages=[p.passage_id], quotes=["Erfundenes Zitat"])
         assert any("quote" in e for e in _check(out, store)[2])
+
+    def test_handles_in_the_answer_text_are_removed(self):
+        from app.chat.service import _strip_handles
+        assert _strip_handles("Donepezil (f246, d3), aspirin 100 mg (d5).") == "Donepezil, aspirin 100 mg."
+        assert _strip_handles("The CT referral (12340012:p053) says nausea.") == "The CT referral says nausea."
+        assert _strip_handles("HbA1c 6.4% in 2015.") == "HbA1c 6.4% in 2015."

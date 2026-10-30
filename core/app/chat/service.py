@@ -59,6 +59,16 @@ def _question_part(question: str, chat: Chat, store: FactStore) -> str:
     return "\n".join(lines)
 
 
+# Handles and passage IDs the model sometimes writes into the answer despite the rule: "(f246, d3)",
+# "(12340012:p053)", "f40". They are citations, not content – removed before the answer is checked
+_HANDLE = r"(?:\b[cfd]\d+\b|\b[\w.-]+:p\d{3}\b)"
+_HANDLES = re.compile(rf"\s*\(\s*{_HANDLE}(?:\s*[,;]\s*{_HANDLE})*\s*\)|\s*{_HANDLE}")
+
+
+def _strip_handles(text: str) -> str:
+    return re.sub(r"\s+([.,;:])", r"\1", _HANDLES.sub("", text)).strip()
+
+
 def _with_day_month_dates(text: str) -> str:
     """Add 05.04.2016 / 5.4.2016 / 5 for every 2016-04-05, so an answer may write "5 Apr 2016" or as the letters do."""
     extra = [f"{d}.{m}.{y} {int(d)}.{int(m)}.{y} {int(d)}" for y, m, d in re.findall(r"(\d{4})-(\d{2})-(\d{2})", text)]
@@ -134,6 +144,7 @@ async def _text_reply(question: str, chat: Chat, store: FactStore, t0: float) ->
         model=settings.RUNTIME_MODEL,
     )
     t_llm = fastpath._elapsed_ms(t0)
+    out.answer = _strip_handles(out.answer)
 
     fact_ids, passage_ids, errors = _check(out, store)
     sources: list[Source] = fastpath._sources_for_facts(fact_ids, store)
