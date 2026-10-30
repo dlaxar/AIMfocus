@@ -132,6 +132,9 @@ data/                     gitignored – IBM patient data
 
 ## API
 
+JSON reference for the frontend (screen variables, output types, contradictions, sources,
+chat): [docs/screen-api.md](docs/screen-api.md).
+
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/api/screen` | `{"situation": str}` → `Screen` |

@@ -28,9 +28,11 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+from app.fastpath import shape
 from app.fastpath.models import (
     DeriveOutput,
     FastScreen,
+    Headline,
     PickOutput,
     ScreenVariable,
     SelectedVariable,
@@ -158,15 +160,20 @@ async def _select(situation: str, store: FactStore, reference_date: str) -> Sele
         temperature=0.0,
         model=settings.RUNTIME_MODEL,
     )
+    # Priority is a unique rank: critical first, then the model's own order within each tier
+    ranked = sorted(enumerate(out.variables), key=lambda iv: (_TIER_RANK[iv[1].tier], iv[0]))
     return SelectOutput(role=out.role, task=out.task, variables=[
         SelectedVariable(
             name=_name(v.label), label=v.label,
             concept_ids=[cat.resolve(h) for h in v.concepts],
             fact_ids=[cat.resolve(h) for h in v.facts],
-            time_scope=v.scope, priority=v.priority,
+            time_scope=v.scope, priority=rank, tier=v.tier, output=v.output, columns=v.columns,
         )
-        for v in out.variables
+        for rank, (_, v) in enumerate(ranked, 1)
     ])
+
+
+_TIER_RANK = {"critical": 0, "important": 1, "background": 2}
 
 
 def _own_passage_ids(fid: str, store: FactStore) -> list[str]:
@@ -273,12 +280,14 @@ def _documented_variable(
     if not facts:
         return None
     fact_ids = [f.fact_id for f in facts]
-    return ScreenVariable(
+    var = ScreenVariable(
         name=v.name, label=v.label, state="documented",
         value=render_value(facts),
         fact_ids=fact_ids, sources=_sources_for_facts(fact_ids, store),
-        priority=v.priority, resolved_ms=_elapsed_ms(t0),
+        priority=v.priority, tier=v.tier, output=v.output, resolved_ms=_elapsed_ms(t0),
     )
+    shape.shape_documented(var, v, facts, store, reference_date)
+    return var
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +364,7 @@ async def _derive_one(
             else:
                 var.state, var.value, var.note = "derived", out.value, out.rationale or None
                 var.sources = [s for s in (_build_source(pid, store) for pid in out.passage_ids) if s]
+    shape.shape_text_result(var)
     var.resolved_ms = _elapsed_ms(t0)
     screen.version += 1
 
@@ -385,6 +395,9 @@ def _attach_contradictions(screen: FastScreen, store: FactStore) -> None:
         v.contradiction_ids = [cx.contradiction_id for cx in touching]
         in_cx = {fid for cx in touching for fid in cx.fact_ids}
         v.contradicting_fact_ids = [fid for fid in v.fact_ids if fid in in_cx]
+        if v.state == "derived" and v.latest:   # a text-search value: contradictions via its passages
+            v.latest[0].contradiction_ids = list(v.contradiction_ids)
+        v.contradictions = shape.contradiction_refs(v, store)
 
 
 def _relevant_contradictions(screen: FastScreen, store: FactStore):
@@ -438,9 +451,15 @@ async def _build(screen: FastScreen, store: FactStore, t0: float) -> None:
     screen.role, screen.task = selected.role, selected.task
     screen.timings_ms["select"] = _elapsed_ms(t0)
     for v in sorted(selected.variables, key=lambda v: v.priority):
+        if v.output == "image":   # the documents hold text only
+            screen.variables.append(ScreenVariable(
+                name=v.name, label=v.label, state="not_available", priority=v.priority, tier=v.tier,
+                output="image", headline=Headline(text="No images in the documents"), resolved_ms=_elapsed_ms(t0),
+            ))
+            continue
         documented = _documented_variable(v, store, screen.reference_date or "", t0)
         screen.variables.append(documented or ScreenVariable(
-            name=v.name, label=v.label, state="pending", priority=v.priority,
+            name=v.name, label=v.label, state="pending", priority=v.priority, tier=v.tier, output=v.output,
         ))
     _attach_contradictions(screen, store)
     screen.timings_ms["first_response"] = _elapsed_ms(t0)

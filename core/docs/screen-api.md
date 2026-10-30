@@ -1,0 +1,282 @@
+# Screen and chat API – JSON reference for the frontend
+
+Everything the frontend needs to render a patient screen, flag contradictions, open the
+source letter, and ask follow-up questions. All routes go through the Flask backend
+(`backend/app.py`, proxied under `/api`). The machine-readable schema is the core's
+OpenAPI document: `http://127.0.0.1:8001/openapi.json` (browsable at `/docs`).
+
+## 1. Flow
+
+| Step | Call | Returns |
+|---|---|---|
+| Clinician enters the situation | `GET /api/session/get?situation=<base64 UTF-8>` | `{session_id, screen}` at once; `screen.status = "starting"` |
+| Screen fills in (while the patient is picked) | `GET /api/session/<id>/stream` (SSE) | an `event: screen` with the full screen on every change, then `event: done` |
+| … or poll | `GET /api/session/<id>` · `?wait=true` blocks until complete | the screen |
+| Short card title | `GET /api/session/<id>/summary` | `{"summary": "Anaesthetist, PreOp Info"}` |
+| Open a source letter | `GET /api/documents/<doc_id>` | the letter's text and passages (section 6) |
+| Ask about the patient | `POST /api/session/<id>/chat` | an answer with sources (section 7) |
+
+`screen.status`: `starting` (select call running, `variables` empty) → `partial`
+(documented items there, text search running) → `complete`. Every update raises
+`screen.version`.
+
+Typical timings with the default model (Claude Haiku 5.5): first items after 2–4 s, complete
+screen after 3–7 s.
+
+## 2. Screen
+
+```jsonc
+{
+  "screen_id": "a1b2c3d4e5f6",            // = session_id
+  "situation": "Ward nurse admitting her on 10 April 2016.",
+  "role": "Ward nurse",
+  "task": "Admission 10 Apr 2016: safety, meds, follow-up",
+  "reference_date": "2016-04-15",          // "now" for the record; present tense means this date
+  "status": "complete",
+  "variables": [ /* ScreenVariable, sorted by priority (section 3) */ ],
+  "contradictions": [ /* Contradiction touching this screen's items (section 5) */ ],
+  "other_contradictions": [ /* every other Contradiction in the record */ ],
+  "timings_ms": {"select": 2800, "first_response": 2810, "derive": 1500, "complete": 4330},
+  "error": null,                           // set when the screen could not be prepared
+  "version": 4
+}
+```
+
+## 3. ScreenVariable
+
+One card on the screen. The model decides **what** to show, its **priority**, **tier** and
+**output type**; the values are always pulled from the documents by code.
+
+### Fields every variable has
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | string | stable key, snake_case (`current_medication`) |
+| `label` | string | card title (`Current medication`) |
+| `priority` | int | unique rank 1, 2, 3 … – render (and load) in this order |
+| `tier` | `critical` · `important` · `background` | `critical`: must be seen before acting – first, prominent. `background`: context – collapsed |
+| `output` | `value` · `trend` · `table` · `list` · `image` | which renderer to use (below) |
+| `state` | see below | where the value comes from |
+| `headline` | Headline \| null | **detail level 1**: what the collapsed card shows |
+| `contradictions` | ContradictionRef[] | every contradiction touching this card (empty list if none) |
+| `sources` | Source[] | all source passages of the card |
+| `resolved_ms` | number \| null | time from the request until this card was ready |
+
+| `state` | Meaning | Suggested UI |
+|---|---|---|
+| `documented` | from the structured fact store | normal |
+| `pending` | text search still running | skeleton |
+| `derived` | found by the text search in a letter (quote checked) | normal, maybe a "from text" hint |
+| `not_documented` | the letters do not contain it – a valid, often important answer | "Not documented" |
+| `check` | an answer existed but failed verification | show with a warning |
+| `not_available` | `output: image` – the documents contain no images | placeholder |
+
+```jsonc
+// Headline – detail level 1
+{"text": "66 kg", "date": "2016-04-15", "change": "-12 kg since 2015-06-28"}   // change: trends only
+```
+
+### Detail level 2, by `output`
+
+Exactly one of these is filled; the others are empty. **Every entry, point and row carries its
+own `source` and `contradiction_ids`** (detail level 3).
+
+#### `value` – current value(s) and their history
+
+`latest`: the newest entry per concept (e.g. one per drug). `history`: older entries, newest first.
+
+```jsonc
+{
+  "label": "Allergies", "priority": 1, "tier": "critical", "output": "value", "state": "documented",
+  "headline": {"text": "Contrast media allergy (nausea, dizziness, vomiting)", "date": "2016-04-15"},
+  "latest": [
+    {"fact_id": "F:12340018:all:01", "text": "Contrast media allergy (nausea, dizziness, vomiting)",
+     "date": "2016-04-15", "status": "positive",
+     "source": {"doc_id": "12340018", "doc_title": "Stat. Patientenbrief (Interne)", "doc_date": "2016-04-15",
+                "passage_id": "12340018:p012", "start": 812, "end": 880, "quote_de": "Allergien: Kontrastmittel …"},
+     "contradiction_ids": []}
+  ],
+  "history": [ /* Entry, older */ ],
+  "contradictions": []
+}
+```
+
+A value found by the text search (`state: "derived"`) is one `latest` entry with `fact_id: null`
+and the quoted passage as `source`.
+
+#### `trend` – numbers for a chart
+
+One `Series` per measured quantity; blood pressure comes as two series (systolic, diastolic).
+Points are oldest first. `label` tells readings on the same day apart (`24h mean`, `admission`).
+
+```jsonc
+{
+  "label": "Weight trend", "priority": 4, "tier": "important", "output": "trend", "state": "documented",
+  "headline": {"text": "66 kg", "date": "2016-04-15", "change": "-12 kg since 2015-06-28"},
+  "series": [
+    {"name": "Body weight", "unit": "kg", "points": [
+      {"date": "2015-06-28", "value": 78, "label": "Weight", "fact_id": "F:12340012:mea:04",
+       "source": {…}, "contradiction_ids": ["X:cf:bmi_12340012_p038"]},
+      {"date": "2016-04-05", "value": 67, "label": "Weight", "fact_id": "F:12340014:mea:02",
+       "source": {…}, "contradiction_ids": ["X:cf:bmi_12340014_p023"]},
+      {"date": "2016-04-15", "value": 66, "label": "Weight", "fact_id": "F:12340018:mea:02",
+       "source": {…}, "contradiction_ids": []}
+    ]}
+  ],
+  "contradictions": [
+    {"contradiction_id": "X:cf:bmi_12340014_p023", "kind": "calculation",
+     "summary_en": "BMI 29 in Ambulanter Patientenbrief (2016-04-05) does not match the height (171 cm) and weight (67 kg) …"}
+  ]
+}
+```
+
+Blood pressure headline: `{"text": "145/88 mmHg", …}`. If a requested trend has no numbers,
+the backend falls back to `output: "value"` – always render by the `output` you receive.
+
+#### `table` – one row per item, few columns
+
+The model picks 2–4 columns for the role (a nurse gets `item, strength, schedule`; a
+pharmacist also `last_change`). `item` is always first. Possible columns:
+`item, strength, schedule, route, class, status, since, last_change, value, date`.
+
+```jsonc
+{
+  "label": "Current medication", "priority": 1, "tier": "critical", "output": "table", "state": "documented",
+  "headline": {"text": "8 item(s): Acetylsalicylic acid (Thrombo ASS), Alendronic acid (Alendronat), …", "date": "2016-04-15"},
+  "table": {
+    "columns": ["item", "strength", "schedule", "last_change"],
+    "rows": [
+      {"cells": {"item": "Candesartan (Blopress)", "strength": "16 mg", "schedule": "1-0-1",
+                 "last_change": "16 mg 1-0-1/2 (2015-06-28) → 16 mg 1-0-1 (2016-04-15)"},
+       "fact_id": "F:12340018:med:04", "date": "2016-04-15", "source": {…}, "contradiction_ids": []}
+    ]
+  },
+  "contradictions": []
+}
+```
+
+An empty cell is `""`.
+
+#### `list` – findings, diagnoses, recommendations
+
+Newest first. `status` is the fact's status (`positive`, `negative`, `current` …) or, for
+recommendations, `open` / `done` (follow-up checked against all later letters).
+
+```jsonc
+{
+  "label": "Open follow-up items", "priority": 6, "tier": "important", "output": "list", "state": "documented",
+  "headline": {"text": "Follow-up open: Next carotid duplex ultrasound planned in 2 months … (+2 more)", "date": "2016-04-15"},
+  "items": [
+    {"fact_id": "D:followup:f_12340012_rec_03",
+     "text": "Follow-up open: Next carotid duplex ultrasound planned in 2 months – no record in the 3 later document(s)",
+     "date": "2016-04-15", "status": "open", "source": {…}, "contradiction_ids": []}
+  ]
+}
+```
+
+#### `image`
+
+`state: "not_available"`, `headline.text: "No images in the documents"`. Show a placeholder.
+
+### Older flat fields
+
+`value` (one text line), `fact_ids`, `note`, `contradiction_ids` and `contradicting_fact_ids`
+are still sent for existing code. New code should use the fields above.
+
+## 4. Shared objects
+
+```jsonc
+// Source – a passage in a letter; enough to open the letter and highlight it
+{"doc_id": "12340018", "doc_title": "Stat. Patientenbrief (Interne)", "doc_date": "2016-04-15",
+ "passage_id": "12340018:p012", "start": 812, "end": 880, "quote_de": "…German text of the passage…"}
+
+// Entry – value, history row, list item, or a value found by the text search (fact_id null)
+{"fact_id": "F:…" | null, "text": "…", "date": "YYYY-MM-DD" | null, "status": "…" | null,
+ "source": Source | null, "contradiction_ids": ["X:…"]}
+
+// TrendPoint
+{"date": "YYYY-MM-DD", "value": 78.0, "label": "Weight" | null, "fact_id": "F:…",
+ "source": Source | null, "contradiction_ids": []}
+
+// ContradictionRef – on a variable
+{"contradiction_id": "X:cf:…", "kind": "calculation", "summary_en": "…"}
+```
+
+Dates are ISO (`YYYY-MM-DD`); a few facts only know the month (`2016-04`).
+
+## 5. Contradictions
+
+Places in the letters that cannot all be true (left vs. right carotid, two admission dates,
+a BMI that does not match weight and height …). They are flagged on three levels:
+
+1. **Screen**: `contradictions` (touch this screen) and `other_contradictions` (the rest).
+2. **Card**: `variable.contradictions` – show a warning badge on the card.
+3. **Entry / point / row**: `contradiction_ids` – mark exactly the value that is affected.
+
+```jsonc
+// Contradiction (screen level)
+{
+  "contradiction_id": "X:cf:copied_text_laterality_12340012_p075",
+  "kind": "laterality",                 // laterality · date · value · calculation · presence · copy_mismatch
+  "summary_en": "Carotid finding copied from Radiologischer Befund (2015-06-11) into … has left and right swapped …",
+  "passage_ids": ["12340008:p012", "12340012:p075", "…"],   // open each to show both sides
+  "concept_ids": ["C:finding:internal_carotid_artery:stenosis"],
+  "fact_ids": ["F:12340008:fin:01", "F:12340012:fin:05", "…"],
+  "judge": {"verdict": "contradiction", "confidence": 0.9, "rationale": "…"} | null
+}
+```
+
+Linking is per passage: another finding in the same sentence can be flagged too.
+
+## 6. Showing a source letter
+
+`GET /api/documents/<doc_id>` returns the whole letter:
+
+```jsonc
+{
+  "doc_id": "12340018", "title": "Stat. Patientenbrief (Interne)", "date": "2016-04-15",
+  "type": "Arztbrief(Inter.)", "department": "3. Medizinische Abteilung mit Onkologie",
+  "text": "ORTXXX, am 15.04.2016\n\nFrau\n…",          // full normalized text
+  "passages": [
+    {"passage_id": "12340018:p000", "section": null, "kind": "sentence",
+     "start": 0, "end": 21, "text": "ORTXXX, am 15.04.2016", "copy_of": null}
+  ]
+}
+```
+
+To highlight a source: `text.slice(source.start, source.end)` is the cited passage (or find
+`passage_id` in `passages`). `copy_of` names the passage a sentence was copied from in an
+earlier letter. Single passage: `GET /api/passages/<passage_id>` on the core.
+
+## 7. Chat
+
+```
+POST /api/session/<session_id>/chat
+{"question": "Which blood thinner does she take?", "chat_id": "…optional, for follow-ups…"}
+```
+
+```jsonc
+{
+  "chat_id": "3f9a1c0b7e21",                       // send back with the next question
+  "answer": "She takes aspirin (Thrombo ASS) 100 mg, 1-0-0, as documented on 15 Apr 2016.",
+  "state": "answered",                              // answered · not_documented · check
+  "sources": [Source, …],
+  "fact_ids": ["F:12340018:med:01"],
+  "note": null,                                     // why an answer is "check"
+  "timings_ms": {"llm": 1800, "total": 1800}
+}
+```
+
+About 2 s per answer. The chat knows the session's screen and the conversation, answers in the
+language of the question, names contradictions, and gives no treatment advice. Errors: `400`
+empty question, `404` unknown `chat_id`, `502` model not reachable. Conversation so far:
+`GET /api/v2/chat/<chat_id>` on the core.
+
+## 8. Rendering checklist
+
+- Sort cards by `priority`; render `critical` first and prominently, `background` collapsed.
+- Pick the renderer by `output`; a `pending` card keeps its `output`, so the skeleton can match.
+- Always show `headline` on the collapsed card; levels 2 and 3 on expand / click.
+- Show a badge when `contradictions` is non-empty; mark entries / points / rows by their `contradiction_ids`.
+- Every entry, point and row has a `source`: link it to the letter view (section 6).
+- `not_documented` is information, not an error.

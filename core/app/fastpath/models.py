@@ -14,6 +14,18 @@ from app.schemas import Contradiction, Source
 # LLM outputs
 # ---------------------------------------------------------------------------
 
+Tier = Literal["critical", "important", "background"]   # critical: first and large; background: collapsed
+OutputType = Literal[
+    "value",   # the current value(s), with older values as history
+    "trend",   # numeric series for a chart
+    "table",   # one row per item (e.g. medication), columns chosen for the role
+    "list",    # findings, diagnoses, recommendations with their status
+    "image",   # requested image; the documents contain none → "not_available"
+]
+# Columns a table may have; the select call picks a few per role
+TABLE_COLUMNS = ["item", "strength", "schedule", "route", "class", "status", "since", "last_change", "value", "date"]
+
+
 class SelectedVariable(BaseModel):
     """
     One variable from the select call. The LLM only says WHICH facts answer it; the value
@@ -25,7 +37,10 @@ class SelectedVariable(BaseModel):
     concept_ids: list[str] = Field(default_factory=list)  # pull facts of these concepts …
     fact_ids: list[str] = Field(default_factory=list)     # … and/or these exact facts (e.g. "D:" ones)
     time_scope: Literal["latest", "all"] = "latest"       # per concept: newest date only, or the whole history
-    priority: int = 3                           # 1 = safety-critical
+    priority: int = 3                           # 1 = shown first; unique rank on the screen
+    tier: Tier = "important"
+    output: OutputType = "value"
+    columns: list[str] = Field(default_factory=list)      # table only
 
 
 class SelectOutput(BaseModel):
@@ -44,7 +59,9 @@ class PickedVariable(BaseModel):
     concepts: list[str] = Field(default_factory=list)  # concept handles (c12)
     facts: list[str] = Field(default_factory=list)     # fact handles (f40, d3)
     scope: Literal["latest", "all"] = "latest"
-    priority: int = 3                           # 1 = safety-critical
+    tier: Tier = "important"                    # the list order is the priority
+    output: OutputType = "value"
+    columns: list[str] = Field(default_factory=list)   # table only: a few of TABLE_COLUMNS
 
 
 class PickOutput(BaseModel):
@@ -72,18 +89,82 @@ VariableState = Literal[
     "derived",          # answered from the raw text by a derive call
     "not_documented",   # derive call confirmed it is not in the documents
     "check",            # an answer existed but failed validation
+    "not_available",    # an output the documents cannot hold (images)
 ]
+
+
+class Entry(BaseModel):
+    """One fact as shown: a value, a history row or a list item. Always with source and contradictions."""
+    fact_id: Optional[str] = None               # None for a value found by the text search
+    text: str
+    date: Optional[str] = None
+    status: Optional[str] = None                # list items: "open" / "done" / diagnosis status …
+    source: Optional[Source] = None
+    contradiction_ids: list[str] = Field(default_factory=list)
+
+
+class Headline(BaseModel):
+    """Detail level 1: what the collapsed card shows."""
+    text: str
+    date: Optional[str] = None
+    change: Optional[str] = None                # trend: e.g. "−12 kg since 2015-06-28"
+
+
+class TrendPoint(BaseModel):
+    date: str
+    value: float
+    label: Optional[str] = None                 # e.g. "24h mean" for one blood pressure reading
+    fact_id: str
+    source: Optional[Source] = None
+    contradiction_ids: list[str] = Field(default_factory=list)
+
+
+class Series(BaseModel):
+    name: str                                   # e.g. "Body weight", "Systolic"
+    unit: str = ""
+    points: list[TrendPoint] = Field(default_factory=list)   # oldest first
+
+
+class TableRow(BaseModel):
+    cells: dict[str, str] = Field(default_factory=dict)      # column → text
+    fact_id: str
+    date: Optional[str] = None
+    source: Optional[Source] = None
+    contradiction_ids: list[str] = Field(default_factory=list)
+
+
+class Table(BaseModel):
+    columns: list[str] = Field(default_factory=list)
+    rows: list[TableRow] = Field(default_factory=list)
+
+
+class ContradictionRef(BaseModel):
+    contradiction_id: str
+    kind: str
+    summary_en: str
 
 
 class ScreenVariable(BaseModel):
     name: str
     label: str
     state: VariableState
+    priority: int = 3                           # unique rank: fetch and show in this order
+    tier: Tier = "important"
+    output: OutputType = "value"
+    # Detail level 1
+    headline: Optional[Headline] = None
+    # Detail level 2, by output type (each entry / point / row carries its source and contradictions)
+    latest: list[Entry] = Field(default_factory=list)        # value: newest per concept
+    history: list[Entry] = Field(default_factory=list)       # value: older ones, newest first
+    series: list[Series] = Field(default_factory=list)       # trend
+    table: Optional[Table] = None                            # table
+    items: list[Entry] = Field(default_factory=list)         # list
+    contradictions: list[ContradictionRef] = Field(default_factory=list)
+    # Flat fields (kept for existing clients)
     value: str = ""
     fact_ids: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     note: Optional[str] = None
-    priority: int = 3
     resolved_ms: Optional[float] = None         # time from request to this value
     contradiction_ids: list[str] = Field(default_factory=list)       # contradictions touching this value
     contradicting_fact_ids: list[str] = Field(default_factory=list)  # its facts that are part of one
